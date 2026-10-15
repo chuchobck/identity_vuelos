@@ -34,6 +34,12 @@ const BASE64 = /^[A-Za-z0-9+/=_-]+$/;
  * o en el panel de una nube.
  */
 function pemDeBase64(variable: string, valor: string): string {
+  if (valor.includes('-----BEGIN')) {
+    throw new ClaveInvalidaError(
+      variable,
+      'debe ser el PEM codificado en base64 en una sola línea, no el PEM directo',
+    );
+  }
   const limpio = valor.replace(/\s+/g, '');
   if (limpio === '' || !BASE64.test(limpio)) {
     throw new ClaveInvalidaError(

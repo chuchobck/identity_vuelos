@@ -109,7 +109,7 @@ export function problemaDelEmisor(valor: string, entorno: unknown): string | und
   if (url.pathname !== '/' || valor.endsWith('/')) {
     return 'debe ser solo el origen del servicio, sin ruta ni barra final';
   }
-  if (entorno === 'production' && url.protocol !== 'https:' && !HOSTS_LOCALES.has(url.host)) {
+  if (entorno === 'production' && url.protocol !== 'https:' && !HOSTS_LOCALES.has(url.hostname)) {
     return 'debe ser https en producción';
   }
   return undefined;
