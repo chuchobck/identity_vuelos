@@ -5,6 +5,7 @@ import {
   descubrimientoEnLaRaiz,
   descubrimientoRoutes,
 } from '../modules/descubrimiento/descubrimiento.routes';
+import { authRoutes } from '../modules/auth/auth.routes';
 import { saludRoutes } from '../modules/salud/salud.routes';
 
 /** Prefijo global de las rutas propias del servicio: /identity/v1/... */
@@ -29,7 +30,10 @@ export const RUTAS_EN_LA_RAIZ: RouteInfo[] = [...descubrimientoEnLaRaiz];
  * Única tabla de rutas del servicio. Junta los *.routes.ts de cada módulo; los controllers
  * no llevan prefijo propio.
  */
-export const rutas: Routes = [...saludRoutes, ...descubrimientoRoutes];
+export const rutas: Routes = [...saludRoutes, ...authRoutes, ...descubrimientoRoutes];
+
+/** Rutas cuyas respuestas no se guardan en ninguna caché: entregan tokens o datos de la cuenta. */
+export const RUTAS_SIN_CACHE = [`/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/auth/`];
 
 /** Las rutas de RUTAS_EN_LA_RAIZ, en el formato de `setGlobalPrefix({ exclude })`. */
 export const excluidasDelPrefijo = (): RouteInfo[] =>

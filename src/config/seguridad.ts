@@ -25,7 +25,10 @@ const CABECERAS_EXPUESTAS = [
  * Seguridad HTTP de la app: helmet, CORS por lista de orígenes, tope del cuerpo y tipo de
  * contenido. Va antes de las rutas; los errores que genere (413, 415) los da el filtro global.
  */
-export function configurarSeguridad(app: NestExpressApplication): void {
+export function configurarSeguridad(
+  app: NestExpressApplication,
+  rutasSinCache: readonly string[] = [],
+): void {
   const config = app.get(ConfigService);
   const enProduccion = config.get<string>('NODE_ENV') === 'production';
 
@@ -51,12 +54,30 @@ export function configurarSeguridad(app: NestExpressApplication): void {
     maxAge: 600,
   });
 
+  // Antes de los parsers: también un 413 o un 415 de estas rutas sale con no-store
+  app.use(sinCache(rutasSinCache));
+
   app.useBodyParser('json', { limit: LIMITE_CUERPO });
   // `extended: false`: un formulario de OAuth 2.0 es plano; con `qs` un `scope[a]=b` llegaría
   // como objeto. Un parámetro repetido sigue llegando como arreglo y lo rechaza el endpoint.
   app.useBodyParser('urlencoded', { limit: LIMITE_CUERPO, extended: false });
   // Después de los parsers: un formulario de más de 100 kB sigue siendo 413
   app.use(exigirTipoDeContenido);
+}
+
+/**
+ * `Cache-Control: no-store` y `Pragma: no-cache` en toda respuesta (éxito o error) de las rutas
+ * que empiezan con alguno de los prefijos: las que entregan tokens o datos de la cuenta. Ningún
+ * proxy ni navegador debe guardarlas (RFC 6749, sección 5.1; RFC 6750, sección 5.3).
+ */
+export function sinCache(prefijos: readonly string[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (prefijos.some((prefijo) => req.path.startsWith(prefijo))) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Pragma', 'no-cache');
+    }
+    next();
+  };
 }
 
 const METODOS_CON_CUERPO = new Set(['POST', 'PUT', 'PATCH']);

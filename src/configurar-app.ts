@@ -8,7 +8,12 @@ import { crearPipeValidacion } from './common/pipes/validacion.pipe';
 import { parsearTrustProxy } from './config/proxy';
 import { configurarSeguridad } from './config/seguridad';
 import { configurarSwagger, RUTA_SWAGGER } from './config/swagger';
-import { excluidasDelPrefijo, PREFIJO_GLOBAL, VERSION_POR_DEFECTO } from './routes/index.routes';
+import {
+  excluidasDelPrefijo,
+  PREFIJO_GLOBAL,
+  RUTAS_SIN_CACHE,
+  VERSION_POR_DEFECTO,
+} from './routes/index.routes';
 
 export interface OpcionesConfigurarApp {
   /** Logger de la app. Por defecto, JSON a la salida estándar con los niveles del entorno. */
@@ -36,7 +41,7 @@ export function configurarApp(app: NestExpressApplication, opciones: OpcionesCon
   app.useLogger(logger);
 
   app.use(middlewareRequestId);
-  configurarSeguridad(app);
+  configurarSeguridad(app, RUTAS_SIN_CACHE);
   app.use(middlewareContexto);
 
   // /identity/v1/...: prefijo global más versión en la URL; las rutas de los estándares

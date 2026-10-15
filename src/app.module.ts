@@ -4,6 +4,7 @@ import { RouterModule } from '@nestjs/core';
 import { CommonModule } from './common/common.module';
 import { validarEntorno } from './config/entorno';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { ClavesModule } from './modules/claves/claves.module';
 import { DescubrimientoModule } from './modules/descubrimiento/descubrimiento.module';
 import { SaludModule } from './modules/salud/salud.module';
@@ -25,6 +26,7 @@ import { rutas } from './routes/index.routes';
     SaludModule,
     ClavesModule,
     AuditoriaModule,
+    AuthModule,
     DescubrimientoModule,
 
     // Tabla de rutas: src/routes/index.routes.ts
