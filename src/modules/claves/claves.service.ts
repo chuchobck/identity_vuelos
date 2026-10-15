@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { KeyObject } from 'node:crypto';
+import { createPublicKey, KeyObject } from 'node:crypto';
 import { JwkPublica, jwkPublica, leerClavePrivada, leerClavePublica } from './material-claves';
 
 /** La clave que firma: la privada nunca sale de este objeto (ni al log ni a una respuesta). */
@@ -34,8 +34,9 @@ export class ClavesService {
     private readonly firma: ClaveDeFirma,
     private readonly anterior: ClaveDeVerificacion | undefined,
   ) {
+    // jose verifica RS256 solo con una clave pública: la de la ranura actual se deriva de la privada
     const vigentes: ClaveDeVerificacion[] = [
-      { kid: firma.kid, publica: firma.privada, jwk: firma.jwk },
+      { kid: firma.kid, publica: createPublicKey(firma.privada), jwk: firma.jwk },
     ];
     if (anterior && anterior.kid !== firma.kid) vigentes.push(anterior);
     this.porKid = new Map(vigentes.map((clave) => [clave.kid, clave]));
