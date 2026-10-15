@@ -39,8 +39,8 @@ export default tseslint.config(
     rules: { 'no-console': 'off' },
   },
   {
-    // Scripts de Node que corre db/reset.sh fuera del servicio: son CommonJS sin compilar.
-    files: ['db/**/*.js'],
+    // Scripts de Node fuera del servicio (db/reset.sh y el transformador de Jest): CommonJS.
+    files: ['db/**/*.js', 'test/**/*.js'],
     languageOptions: { sourceType: 'commonjs' },
     rules: { '@typescript-eslint/no-require-imports': 'off', 'no-console': 'off' },
   },
