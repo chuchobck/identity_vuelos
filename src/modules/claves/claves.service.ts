@@ -46,17 +46,21 @@ export class ClavesService {
     );
   }
 
-  static async desdeEntorno(config: ConfigService): Promise<ClavesService> {
-    const privada = leerClavePrivada(
-      'JWT_SIGNING_KEY',
+  static desdeEntorno(config: ConfigService): Promise<ClavesService> {
+    return ClavesService.desdeValores(
       config.getOrThrow<string>('JWT_SIGNING_KEY'),
+      config.get<string>('JWT_PREVIOUS_PUBLIC_KEY'),
     );
+  }
+
+  /** Las claves como llegan en las variables (PEM en base64). Las pruebas de rotación lo usan. */
+  static async desdeValores(firmaBase64: string, anteriorBase64?: string): Promise<ClavesService> {
+    const privada = leerClavePrivada('JWT_SIGNING_KEY', firmaBase64);
     const firma: ClaveDeFirma = { privada, ...(await kidYJwk(privada)) };
 
-    const valorAnterior = config.get<string>('JWT_PREVIOUS_PUBLIC_KEY');
     let anterior: ClaveDeVerificacion | undefined;
-    if (valorAnterior) {
-      const publica = leerClavePublica('JWT_PREVIOUS_PUBLIC_KEY', valorAnterior);
+    if (anteriorBase64) {
+      const publica = leerClavePublica('JWT_PREVIOUS_PUBLIC_KEY', anteriorBase64);
       anterior = { publica, ...(await kidYJwk(publica)) };
     }
     return new ClavesService(firma, anterior);
