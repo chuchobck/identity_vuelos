@@ -8,4 +8,5 @@ export const descubrimientoRoutes: Routes = [{ path: '.well-known', module: Desc
 /** Van en la raíz: el descubrimiento las busca en `{issuer}/.well-known/...`. */
 export const descubrimientoEnLaRaiz: RouteInfo[] = [
   { path: '.well-known/jwks.json', method: RequestMethod.GET },
+  { path: '.well-known/openid-configuration', method: RequestMethod.GET },
 ];

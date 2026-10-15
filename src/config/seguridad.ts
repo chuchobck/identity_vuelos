@@ -4,6 +4,7 @@ import { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { CODIGO_SIN_EQUIVALENTE } from '../common/errores/codigo-error';
 import { ErrorNegocio } from '../common/errores/error-negocio';
+import { RUTA_TOKEN } from '../modules/oauth2/ruta-token';
 import { listarOrigenes } from './origenes-cors';
 
 /** Tope del cuerpo de una petición (JSON y formularios). Más grande responde 413. */
@@ -83,7 +84,7 @@ export function sinCache(prefijos: readonly string[]) {
 const METODOS_CON_CUERPO = new Set(['POST', 'PUT', 'PATCH']);
 
 /** Rutas que reciben un formulario de OAuth 2.0 (RFC 6749) en lugar de JSON. */
-export const RUTAS_FORMULARIO = new Set(['/oauth2/token']);
+const RUTAS_FORMULARIO = new Set([RUTA_TOKEN]);
 
 /**
  * Toda operación con cuerpo recibe JSON, salvo /oauth2/token, que recibe

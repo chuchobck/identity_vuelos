@@ -28,7 +28,8 @@ export type MotivoSeguridad =
   | 'CLIENTE_INACTIVO'
   | 'SCOPE_NO_PERMITIDO'
   | 'GRANT_NO_SOPORTADO'
-  | 'PETICION_INVALIDA';
+  | 'PETICION_INVALIDA'
+  | 'LIMITE_EXCEDIDO';
 
 export interface EventoSeguridad {
   evento: evento_seguridad;

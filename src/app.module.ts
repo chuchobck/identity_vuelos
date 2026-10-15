@@ -7,6 +7,7 @@ import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClavesModule } from './modules/claves/claves.module';
 import { DescubrimientoModule } from './modules/descubrimiento/descubrimiento.module';
+import { OAuth2Module } from './modules/oauth2/oauth2.module';
 import { SaludModule } from './modules/salud/salud.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { rutas } from './routes/index.routes';
@@ -27,6 +28,7 @@ import { rutas } from './routes/index.routes';
     ClavesModule,
     AuditoriaModule,
     AuthModule,
+    OAuth2Module,
     DescubrimientoModule,
 
     // Tabla de rutas: src/routes/index.routes.ts

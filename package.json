@@ -17,6 +17,8 @@
     "prisma:pull": "prisma db pull && prisma generate",
     "prekeys:generate": "nest build",
     "keys:generate": "node dist/cli/generar-claves.js",
+    "precliente:crear": "nest build",
+    "cliente:crear": "node dist/cli/crear-cliente.js",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",

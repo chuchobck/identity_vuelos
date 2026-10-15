@@ -6,6 +6,8 @@ import {
   descubrimientoRoutes,
 } from '../modules/descubrimiento/descubrimiento.routes';
 import { authRoutes } from '../modules/auth/auth.routes';
+import { oauth2EnLaRaiz, oauth2Routes } from '../modules/oauth2/oauth2.routes';
+import { RUTA_TOKEN } from '../modules/oauth2/ruta-token';
 import { saludRoutes } from '../modules/salud/salud.routes';
 
 /** Prefijo global de las rutas propias del servicio: /identity/v1/... */
@@ -24,16 +26,21 @@ export const VERSION_POR_DEFECTO = '1';
  *
  * Sus controllers llevan VERSION_NEUTRAL para que tampoco reciban el /v1.
  */
-export const RUTAS_EN_LA_RAIZ: RouteInfo[] = [...descubrimientoEnLaRaiz];
+export const RUTAS_EN_LA_RAIZ: RouteInfo[] = [...descubrimientoEnLaRaiz, ...oauth2EnLaRaiz];
 
 /**
  * Única tabla de rutas del servicio. Junta los *.routes.ts de cada módulo; los controllers
  * no llevan prefijo propio.
  */
-export const rutas: Routes = [...saludRoutes, ...authRoutes, ...descubrimientoRoutes];
+export const rutas: Routes = [
+  ...saludRoutes,
+  ...authRoutes,
+  ...oauth2Routes,
+  ...descubrimientoRoutes,
+];
 
 /** Rutas cuyas respuestas no se guardan en ninguna caché: entregan tokens o datos de la cuenta. */
-export const RUTAS_SIN_CACHE = [`/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/auth/`];
+export const RUTAS_SIN_CACHE = [`/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/auth/`, RUTA_TOKEN];
 
 /** Las rutas de RUTAS_EN_LA_RAIZ, en el formato de `setGlobalPrefix({ exclude })`. */
 export const excluidasDelPrefijo = (): RouteInfo[] =>
