@@ -1,0 +1,27 @@
+# Base de datos local del servicio de identidad. Aparte de la del core (que usa el puerto 5432):
+# este contenedor publica el 5433 para que los dos puedan correr a la vez.
+name: quinde-identity
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: quinde_identity_db
+    ports:
+      # El puerto del host se cambia con DB_PORT en .env (compose lo lee solo).
+      - '${DB_PORT:-5433}:5432'
+    environment:
+      POSTGRES_DB: identity_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      # Desde la imagen 18 los datos viven en /var/lib/postgresql/<versión>/docker.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d identity_db']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
