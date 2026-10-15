@@ -1,6 +1,10 @@
 import { RequestMethod } from '@nestjs/common';
 import { RouteInfo } from '@nestjs/common/interfaces';
 import { Routes } from '@nestjs/core';
+import {
+  descubrimientoEnLaRaiz,
+  descubrimientoRoutes,
+} from '../modules/descubrimiento/descubrimiento.routes';
 import { saludRoutes } from '../modules/salud/salud.routes';
 
 /** Prefijo global de las rutas propias del servicio: /identity/v1/... */
@@ -19,13 +23,13 @@ export const VERSION_POR_DEFECTO = '1';
  *
  * Sus controllers llevan VERSION_NEUTRAL para que tampoco reciban el /v1.
  */
-export const RUTAS_EN_LA_RAIZ: RouteInfo[] = [];
+export const RUTAS_EN_LA_RAIZ: RouteInfo[] = [...descubrimientoEnLaRaiz];
 
 /**
  * Única tabla de rutas del servicio. Junta los *.routes.ts de cada módulo; los controllers
  * no llevan prefijo propio.
  */
-export const rutas: Routes = [...saludRoutes];
+export const rutas: Routes = [...saludRoutes, ...descubrimientoRoutes];
 
 /** Las rutas de RUTAS_EN_LA_RAIZ, en el formato de `setGlobalPrefix({ exclude })`. */
 export const excluidasDelPrefijo = (): RouteInfo[] =>
