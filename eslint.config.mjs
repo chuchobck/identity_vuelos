@@ -35,7 +35,7 @@ export default tseslint.config(
   },
   {
     // Herramientas de línea de comandos: imprimen su resultado en la consola.
-    files: ['src/cli/**/*.ts'],
+    files: ['src/cli/**/*.ts', 'scripts/**/*.mjs'],
     rules: { 'no-console': 'off' },
   },
   {
