@@ -1,0 +1,926 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/identity/v1/health": {
+      "get": {
+        "operationId": "SaludController_vida",
+        "summary": "Chequeo de vida: el proceso responde (no mira la base)",
+        "description": "Sirve para reiniciar un contenedor colgado; una base caída no lo hace fallar.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VidaRespuestaDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Salud"
+        ]
+      }
+    },
+    "/identity/v1/health/ready": {
+      "get": {
+        "operationId": "SaludController_disponibilidad",
+        "summary": "Chequeo de disponibilidad: 200 solo si la base contesta",
+        "description": "Sirve para sacar la instancia del balanceador mientras la base no responde.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisponibilidadRespuestaDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "La base no responde",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Salud"
+        ]
+      }
+    },
+    "/identity/v1/auth/register": {
+      "post": {
+        "operationId": "AuthController_registrar",
+        "summary": "Crear una cuenta de cliente",
+        "description": "Registro público: crea un usuario con el rol cliente (scopes de lectura, hold, reserva, cancelación y webhooks). Después, POST /identity/v1/auth/login entrega el token.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistroDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuestaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Correo inválido o contraseña fuera de 12 a 128 caracteres",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ya existe una cuenta con ese correo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Más de 10 registros por IP en 10 minutos",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/identity/v1/auth/login": {
+      "post": {
+        "operationId": "AuthController_iniciarSesion",
+        "summary": "Iniciar sesión",
+        "description": "Entrega un access_token (JWT RS256, 15 minutos) y un refresh_token (7 días, se rota en cada uso). Un correo inexistente, una contraseña errónea y una cuenta inactiva responden igual.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRespuestaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cuerpo inválido",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Correo o contraseña incorrectos",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Más de 5 intentos por IP en un minuto",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/identity/v1/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refrescar",
+        "summary": "Renovar el token de acceso",
+        "description": "Rota el refresh_token: el usado deja de servir. Reusar uno ya rotado revoca la sesión completa.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefrescoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRespuestaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cuerpo inválido",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token de refresco inválido, vencido, revocado o reutilizado",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Más de 30 renovaciones por IP en un minuto",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/identity/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_cerrarSesion",
+        "summary": "Cerrar sesión",
+        "description": "Revoca el refresh_token y los demás de su sesión. El access_token vigente sirve hasta que vence.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefrescoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Sesión cerrada (también si el token ya no era válido)"
+          },
+          "401": {
+            "description": "Falta el token, no es válido, venció o no es de una persona",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/identity/v1/auth/me": {
+      "get": {
+        "operationId": "AuthController_perfil",
+        "summary": "Perfil, roles y scopes del usuario del token",
+        "description": "Sirve para comprobar que el token de Authorize funciona y qué scopes tiene.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuestaDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido, venció o no es de una persona",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/oauth2/token": {
+      "post": {
+        "operationId": "OAuth2Controller_token",
+        "summary": "Token de acceso para un cliente (grant client_credentials)",
+        "description": "El cliente se autentica con Authorization: Basic (client_secret_basic) o con client_id y client_secret en el formulario (client_secret_post), no con los dos. Sin `scope` recibe los permitidos menos flights:admin, que solo sale si está permitido y se pide. No hay refresh_token: cuando el token vence (15 minutos) se pide otro. authorization_code no está implementado.",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grant_type"
+                ],
+                "properties": {
+                  "grant_type": {
+                    "type": "string",
+                    "enum": [
+                      "client_credentials"
+                    ]
+                  },
+                  "scope": {
+                    "type": "string",
+                    "description": "Separados por espacio; posibles: flights:read flights:hold flights:book flights:cancel flights:webhooks flights:admin",
+                    "example": "flights:read flights:hold"
+                  },
+                  "client_id": {
+                    "type": "string",
+                    "description": "Solo con client_secret_post"
+                  },
+                  "client_secret": {
+                    "type": "string",
+                    "description": "Solo con client_secret_post"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenClienteRespuestaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request, invalid_scope o unsupported_grant_type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOAuthDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid_client (con WWW-Authenticate: Basic)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOAuthDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "temporarily_unavailable: más de 20 por IP o 10 por cliente en un minuto (Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOAuthDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "OAuth 2.0"
+        ]
+      }
+    },
+    "/.well-known/jwks.json": {
+      "get": {
+        "operationId": "DescubrimientoController_jwks",
+        "summary": "Claves públicas para verificar los tokens (JWKS)",
+        "description": "La clave actual y, durante una rotación, la anterior. Un consumidor elige la clave por el `kid` del token y acepta solo RS256.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JwksDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Descubrimiento"
+        ]
+      }
+    },
+    "/.well-known/openid-configuration": {
+      "get": {
+        "operationId": "DescubrimientoController_configuracion",
+        "summary": "Metadatos del proveedor (descubrimiento)",
+        "description": "issuer, jwks_uri y token_endpoint salen de JWT_ISSUER. Solo client_credentials: el login de personas es POST /identity/v1/auth/login.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfiguracionOpenIdDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Descubrimiento"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Quinde · Identity",
+    "description": "Proveedor de identidad de Quinde: emite tokens de acceso JWT RS256 (RFC 9068) para personas y para clientes OAuth 2.0, y publica sus claves públicas en /.well-known/jwks.json.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Cuentas de personas: registro, login, refresh con rotación, logout y perfil (la misma forma que /flights/v1/auth del core)."
+    },
+    {
+      "name": "OAuth 2.0",
+      "description": "Acceso máquina a máquina (RFC 6749, grant client_credentials). Errores con el formato de RFC 6749, no ProblemDetails."
+    },
+    {
+      "name": "Descubrimiento",
+      "description": "Claves públicas (JWKS) y metadatos para que un consumidor valide los tokens sin compartir secretos."
+    },
+    {
+      "name": "Salud",
+      "description": "Chequeo de vida y de disponibilidad."
+    }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "Pega el access_token de POST /identity/v1/auth/login (vence en 15 minutos)"
+      }
+    },
+    "schemas": {
+      "CodigoError": {
+        "type": "string",
+        "enum": [
+          "VALIDATION_FAILED",
+          "RATE_LIMIT_EXCEEDED"
+        ]
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "https://api.booking-hub.com/errors/validation-failed"
+          },
+          "title": {
+            "type": "string",
+            "example": "Unauthorized"
+          },
+          "status": {
+            "type": "number",
+            "example": 401
+          },
+          "detail": {
+            "type": "string",
+            "example": "Invalid email or password"
+          },
+          "code": {
+            "example": "VALIDATION_FAILED",
+            "$ref": "#/components/schemas/CodigoError"
+          },
+          "invalidParams": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ]
+      },
+      "VidaRespuestaDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "UP"
+            ],
+            "description": "El proceso está vivo"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-10-15T19:00:00.000Z",
+            "description": "Hora del servidor (UTC)"
+          }
+        },
+        "required": [
+          "status",
+          "timestamp"
+        ]
+      },
+      "DisponibilidadRespuestaDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN"
+            ],
+            "description": "Estado general del servicio"
+          },
+          "database": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN"
+            ],
+            "description": "Resultado de SELECT 1 contra PostgreSQL"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-10-15T19:00:00.000Z",
+            "description": "Hora del servidor (UTC)"
+          }
+        },
+        "required": [
+          "status",
+          "database",
+          "timestamp"
+        ]
+      },
+      "RegistroDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "ana@example.com",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "example": "una frase larga y fácil de recordar",
+            "minLength": 12,
+            "maxLength": 128,
+            "format": "password"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UsuarioRespuestaDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Es el `sub` de los tokens"
+          },
+          "email": {
+            "type": "string",
+            "example": "ana@example.com"
+          },
+          "roles": {
+            "example": [
+              "cliente"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scopes": {
+            "example": [
+              "flights:read",
+              "flights:hold"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "roles",
+          "scopes",
+          "createdAt"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "ana@example.com",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "example": "una frase larga y fácil de recordar",
+            "minLength": 12,
+            "maxLength": 128,
+            "format": "password"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "TokenRespuestaDto": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "JWT de acceso; va en Authorization: Bearer <token>"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expires_in": {
+            "type": "number",
+            "example": 900,
+            "description": "Segundos de vida del token de acceso"
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Token opaco para POST /identity/v1/auth/refresh; se rota en cada uso"
+          },
+          "scope": {
+            "type": "string",
+            "example": "flights:read flights:hold flights:book",
+            "description": "Scopes concedidos, separados por espacio"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "refresh_token",
+          "scope"
+        ]
+      },
+      "RefrescoDto": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "description": "Token de refresco recibido en el login o en el último refresh"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ]
+      },
+      "ErrorOAuthDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "invalid_client",
+              "invalid_scope",
+              "unsupported_grant_type",
+              "temporarily_unavailable",
+              "server_error"
+            ]
+          },
+          "error_description": {
+            "type": "string",
+            "example": "Client authentication failed"
+          }
+        },
+        "required": [
+          "error",
+          "error_description"
+        ]
+      },
+      "TokenClienteRespuestaDto": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "JWT de acceso RS256 (RFC 9068); va en Authorization: Bearer"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expires_in": {
+            "type": "number",
+            "example": 900,
+            "description": "Segundos de vida del token de acceso"
+          },
+          "scope": {
+            "type": "string",
+            "example": "flights:read flights:hold",
+            "description": "Scopes concedidos, separados por espacio"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "scope"
+        ]
+      },
+      "JwkDto": {
+        "type": "object",
+        "properties": {
+          "kty": {
+            "type": "string",
+            "enum": [
+              "RSA"
+            ]
+          },
+          "n": {
+            "type": "string",
+            "description": "Módulo RSA en base64url"
+          },
+          "e": {
+            "type": "string",
+            "example": "AQAB",
+            "description": "Exponente público en base64url"
+          },
+          "kid": {
+            "type": "string",
+            "example": "VNokron1-miRBDmPzffdzlicNLAtQy1rirAbrUUnYVc",
+            "description": "Huella SHA-256 de la clave (RFC 7638); va en la cabecera `kid` de cada token"
+          },
+          "alg": {
+            "type": "string",
+            "enum": [
+              "RS256"
+            ]
+          },
+          "use": {
+            "type": "string",
+            "enum": [
+              "sig"
+            ]
+          }
+        },
+        "required": [
+          "kty",
+          "n",
+          "e",
+          "kid",
+          "alg",
+          "use"
+        ]
+      },
+      "JwksDto": {
+        "type": "object",
+        "properties": {
+          "keys": {
+            "description": "La clave que firma hoy y, durante una rotación, la anterior",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JwkDto"
+            }
+          }
+        },
+        "required": [
+          "keys"
+        ]
+      },
+      "ConfiguracionOpenIdDto": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "example": "https://identity.quinde.example"
+          },
+          "jwks_uri": {
+            "type": "string",
+            "example": "https://identity.quinde.example/.well-known/jwks.json"
+          },
+          "token_endpoint": {
+            "type": "string",
+            "example": "https://identity.quinde.example/oauth2/token"
+          },
+          "token_endpoint_auth_methods_supported": {
+            "example": [
+              "client_secret_basic",
+              "client_secret_post"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "grant_types_supported": {
+            "example": [
+              "client_credentials"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scopes_supported": {
+            "example": [
+              "flights:read",
+              "flights:hold"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id_token_signing_alg_values_supported": {
+            "example": [
+              "RS256"
+            ],
+            "description": "Este servicio no emite id_token: es el algoritmo de todo lo que firma",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "issuer",
+          "jwks_uri",
+          "token_endpoint",
+          "token_endpoint_auth_methods_supported",
+          "grant_types_supported",
+          "scopes_supported",
+          "id_token_signing_alg_values_supported"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,129 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  previewFeatures     = ["partialIndexes"]
+  importFileExtension = ""
+  moduleFormat        = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model auditoria_seguridad {
+  id             BigInt              @id(map: "pk_auditoria_seguridad") @default(autoincrement())
+  fecha_evento   DateTime            @default(now()) @db.Timestamptz(6)
+  evento         evento_seguridad
+  resultado      resultado_seguridad
+  motivo         String?
+  usuario_id     String?             @db.Uuid
+  cliente_id     String?             @db.Uuid
+  correo_parcial String?
+  direccion_ip   String?             @db.Inet
+  id_peticion    String?
+  cliente_oauth  cliente_oauth?      @relation(fields: [cliente_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_cliente")
+  usuario        usuario?            @relation(fields: [usuario_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_usuario")
+
+  @@index([cliente_id, fecha_evento], map: "ix_auditoria_seguridad_cliente", where: raw("(cliente_id IS NOT NULL)"))
+  @@index([fecha_evento], map: "ix_auditoria_seguridad_fecha")
+  @@index([usuario_id, fecha_evento], map: "ix_auditoria_seguridad_usuario", where: raw("(usuario_id IS NOT NULL)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model cliente_oauth {
+  id                  String                @id(map: "pk_cliente_oauth") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  codigo              String                @unique(map: "uq_cliente_oauth_codigo")
+  nombre              String
+  hash_secreto        String
+  scopes_permitidos   String[]
+  activo              Boolean               @default(true)
+  fecha_creacion      DateTime              @default(now()) @db.Timestamptz(6)
+  fecha_actualizacion DateTime              @default(now()) @db.Timestamptz(6)
+  auditoria_seguridad auditoria_seguridad[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model rol {
+  id          BigInt        @id(map: "pk_rol") @default(autoincrement())
+  codigo      String        @unique(map: "uq_rol_codigo")
+  descripcion String
+  activo      Boolean       @default(true)
+  usuario_rol usuario_rol[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model token_refresco {
+  id                   String             @id(map: "pk_token_refresco") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id           String             @db.Uuid
+  id_familia           String             @db.Uuid
+  hash_token           String             @unique(map: "uq_token_refresco_hash") @db.VarChar(64)
+  fecha_creacion       DateTime           @default(now()) @db.Timestamptz(6)
+  fecha_expiracion     DateTime           @db.Timestamptz(6)
+  fecha_revocacion     DateTime?          @db.Timestamptz(6)
+  motivo_revocacion    motivo_revocacion?
+  reemplazado_por_id   String?            @db.Uuid
+  token_refresco       token_refresco?    @relation("token_refrescoTotoken_refresco", fields: [reemplazado_por_id], references: [id], onUpdate: NoAction, map: "fk_token_refresco_reemplazo")
+  other_token_refresco token_refresco[]   @relation("token_refrescoTotoken_refresco")
+  usuario              usuario            @relation(fields: [usuario_id], references: [id], onUpdate: NoAction, map: "fk_token_refresco_usuario")
+
+  @@index([id_familia], map: "ix_token_refresco_familia")
+  @@index([fecha_expiracion], map: "ix_token_refresco_fecha_expiracion")
+  @@index([reemplazado_por_id], map: "ix_token_refresco_reemplazo", where: raw("(reemplazado_por_id IS NOT NULL)"))
+  @@index([usuario_id], map: "ix_token_refresco_usuario")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model usuario {
+  id                  String                @id(map: "pk_usuario") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  correo              String                @unique(map: "uq_usuario_correo")
+  hash_contrasena     String
+  activo              Boolean               @default(true)
+  fecha_creacion      DateTime              @default(now()) @db.Timestamptz(6)
+  auditoria_seguridad auditoria_seguridad[]
+  token_refresco      token_refresco[]
+  usuario_rol         usuario_rol[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model usuario_rol {
+  id               BigInt   @id(map: "pk_usuario_rol") @default(autoincrement())
+  usuario_id       String   @db.Uuid
+  rol_id           BigInt
+  activo           Boolean  @default(true)
+  fecha_asignacion DateTime @default(now()) @db.Timestamptz(6)
+  rol              rol      @relation(fields: [rol_id], references: [id], onUpdate: NoAction, map: "fk_usuario_rol_rol")
+  usuario          usuario  @relation(fields: [usuario_id], references: [id], onUpdate: NoAction, map: "fk_usuario_rol_usuario")
+
+  @@unique([usuario_id, rol_id], map: "uq_usuario_rol")
+  @@index([rol_id], map: "ix_usuario_rol_rol")
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum evento_seguridad {
+  REGISTRO
+  LOGIN
+  REFRESCO
+  REUSO_REFRESCO
+  LOGOUT
+  ACCESO_CUENTA_INACTIVA
+  TOKEN_CLIENTE
+  CLIENTE_CREADO
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum motivo_revocacion {
+  CIERRE_SESION
+  REUTILIZACION
+  USUARIO_INACTIVO
+}
+
+enum resultado_seguridad {
+  EXITO
+  FALLO
+}

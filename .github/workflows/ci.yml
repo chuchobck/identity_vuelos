@@ -1,0 +1,96 @@
+# Integración continua: en cada push y pull request a main, una base PostgreSQL 18 nueva con el
+# esquema y la semilla de db/, y luego lint, formato, tipos, compilación y la suite e2e completa
+# (que incluye la prueba de que contracts/identity-openapi.json está al día). Aparte, la imagen
+# de Docker tiene que construir.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: lint, tipos, build y pruebas e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: identity_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d identity_db"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/identity_db?schema=identidad
+      NODE_ENV: test
+      PORT: '3001'
+      # Las pruebas generan sus propias claves RSA efímeras (test/utils/entorno-pruebas.ts): aquí
+      # no hay ninguna clave ni secreto.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dependencias (y cliente de Prisma)
+        run: npm ci
+
+      # Los mismos archivos que db/reset.sh, con el psql 18 del contenedor. Sin hash_admin, la
+      # semilla crea los roles y no el administrador.
+      - name: Esquema y semilla
+        env:
+          CONTENEDOR: ${{ job.services.postgres.id }}
+        run: |
+          for archivo in esquema_identidad semilla_identidad; do
+            echo "Cargando db/${archivo}.sql"
+            docker exec -i "$CONTENEDOR" psql -U postgres -d identity_db -v ON_ERROR_STOP=1 -q < "db/${archivo}.sql"
+          done
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formato
+        run: npm run format:check
+
+      - name: Tipos (también test/)
+        run: npm run typecheck
+
+      - name: Compilación
+        run: npm run build
+
+      - name: Pruebas e2e
+        run: npm test
+
+  imagen:
+    name: imagen de Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir la imagen (sin publicarla)
+        run: docker build -t quinde-identity:ci .
+
+      - name: La imagen corre como usuario sin privilegios
+        run: test "$(docker run --rm --entrypoint id quinde-identity:ci -u)" = "1000"
