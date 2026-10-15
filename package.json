@@ -19,6 +19,8 @@
     "keys:generate": "node dist/cli/generar-claves.js",
     "precliente:crear": "nest build",
     "cliente:crear": "node dist/cli/crear-cliente.js",
+    "preopenapi:export": "nest build",
+    "openapi:export": "node dist/cli/exportar-openapi.js",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",

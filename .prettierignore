@@ -8,3 +8,6 @@ package-lock.json
 db
 docs
 *.md
+
+# Generado por npm run openapi:export (una prueba lo compara)
+contracts
