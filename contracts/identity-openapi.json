@@ -325,11 +325,257 @@
         ]
       }
     },
+    "/identity/v1/admin/users": {
+      "post": {
+        "operationId": "AdministradoresController_crear",
+        "summary": "Crear un administrador",
+        "description": "Crea una cuenta con el rol administrador (el rol lo fija el servidor; el cuerpo no lo admite). Mismas reglas que POST /auth/register: correo válido y contraseña de 12 a 128 caracteres.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearAdministradorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministradorRespuestaDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parámetro o cuerpo inválido",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido, venció o no es de una persona",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no trae los scopes requeridos: flights:admin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ya existe una cuenta con ese correo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Admin · Administradores"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "AdministradoresController_listar",
+        "summary": "Listar los administradores (sin los dados de baja, salvo includeInactive)",
+        "description": "Más recientes primero. Nunca devuelve contraseñas ni hashes.",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "El `nextCursor` de la página anterior",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeInactive",
+            "required": false,
+            "in": "query",
+            "description": "Incluye los administradores dados de baja",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaAdministradoresDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Un cursor que no es de esta lista o un límite inválido",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido, venció o no es de una persona",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no trae los scopes requeridos: flights:admin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Admin · Administradores"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/identity/v1/admin/users/{id}": {
+      "delete": {
+        "operationId": "AdministradoresController_darDeBaja",
+        "summary": "Dar de baja a un administrador (eliminación lógica)",
+        "description": "Deja la cuenta inactiva (no puede iniciar sesión) y revoca sus tokens de refresco; el token de acceso vigente sirve hasta que vence (15 minutos). No borra la fila. Repetirlo no cambia nada. No se puede dar de baja la propia cuenta ni al último administrador activo (409).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dado de baja"
+          },
+          "400": {
+            "description": "Parámetro o cuerpo inválido",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido, venció o no es de una persona",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no trae los scopes requeridos: flights:admin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe o no es administrador",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Es la propia cuenta o el último administrador activo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Admin · Administradores"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/oauth2/token": {
       "post": {
         "operationId": "OAuth2Controller_token",
         "summary": "Token de acceso para un cliente (grant client_credentials)",
-        "description": "El cliente se autentica con Authorization: Basic (client_secret_basic) o con client_id y client_secret en el formulario (client_secret_post), no con los dos. Sin `scope` recibe los permitidos menos flights:admin, que solo sale si está permitido y se pide. No hay refresh_token: cuando el token vence (15 minutos) se pide otro. authorization_code no está implementado.",
+        "description": "El cliente se autentica con Authorization: Basic (client_secret_basic) o con client_id y client_secret en el formulario (client_secret_post), no con los dos. Sin `scope` recibe los permitidos menos flights:admin y events:publish, que solo salen si están permitidos y se piden. No hay refresh_token: cuando el token vence (15 minutos) se pide otro. authorization_code no está implementado.",
         "parameters": [
           {
             "name": "authorization",
@@ -358,7 +604,7 @@
                   },
                   "scope": {
                     "type": "string",
-                    "description": "Separados por espacio; posibles: flights:read flights:hold flights:book flights:cancel flights:webhooks flights:admin",
+                    "description": "Separados por espacio; posibles: flights:read flights:hold flights:book flights:cancel flights:webhooks flights:admin events:publish",
                     "example": "flights:read flights:hold"
                   },
                   "client_id": {
@@ -471,13 +717,17 @@
   "info": {
     "title": "Quinde · Identity",
     "description": "Proveedor de identidad de Quinde: emite tokens de acceso JWT RS256 (RFC 9068) para personas y para clientes OAuth 2.0, y publica sus claves públicas en /.well-known/jwks.json.",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "contact": {}
   },
   "tags": [
     {
       "name": "Auth",
       "description": "Cuentas de personas: registro, login, refresh con rotación, logout y perfil (la misma forma que /flights/v1/auth del core)."
+    },
+    {
+      "name": "Admin · Administradores",
+      "description": "Altas, lista y bajas de administradores (scope flights:admin, solo con el token de una persona): las mismas rutas, cuerpos y errores que /flights/v1/admin/users del core. DELETE da de baja (activo = false), no borra."
     },
     {
       "name": "OAuth 2.0",
@@ -739,6 +989,74 @@
         },
         "required": [
           "refresh_token"
+        ]
+      },
+      "CrearAdministradorDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "ana@example.com",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "example": "una frase larga y fácil de recordar",
+            "minLength": 12,
+            "maxLength": 128,
+            "format": "password"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "AdministradorRespuestaDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Es el `sub` de sus tokens y el id en la URL"
+          },
+          "email": {
+            "type": "string",
+            "example": "admin2@quinde.example"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "active": {
+            "type": "boolean",
+            "example": true,
+            "description": "false si el administrador fue dado de baja"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "createdAt",
+          "active"
+        ]
+      },
+      "ListaAdministradoresDto": {
+        "type": "object",
+        "properties": {
+          "nextCursor": {
+            "type": "string",
+            "description": "Pásalo como `cursor` para la siguiente página"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdministradorRespuestaDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "ErrorOAuthDto": {

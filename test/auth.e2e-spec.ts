@@ -1,6 +1,8 @@
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as request from 'supertest';
+import { decodeJwt } from 'jose';
 import { AuthService } from '../src/modules/auth/auth.service';
+import { SCOPE_EVENTOS, SCOPES_POR_ROL } from '../src/modules/auth/scopes';
 import { hashearTokenRefresco } from '../src/modules/auth/seguridad/token-refresco';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { crearApp } from './utils/crear-app';
@@ -362,6 +364,31 @@ describe('Auth de personas', () => {
       });
       expect(sesion.scope).toBe([...SCOPES_CLIENTE, 'flights:admin'].join(' '));
       expect(respuesta.headers['cache-control']).toBe('no-store');
+    });
+
+    it('ningún rol de persona recibe events:publish: ni en el login, ni en el refresh, ni en /me', async () => {
+      expect(Object.values(SCOPES_POR_ROL).flat()).not.toContain(SCOPE_EVENTOS);
+      for (const administrador of [false, true]) {
+        const sesion = await iniciarSesion(app, await crearUsuario(app, { administrador }));
+        const refrescada = await http()
+          .post(`${AUTH}/refresh`)
+          .send({ refresh_token: sesion.refresh_token })
+          .expect(200);
+        const perfil = await http()
+          .get(`${AUTH}/me`)
+          .set('Authorization', `Bearer ${refrescada.body.access_token}`)
+          .expect(200);
+
+        for (const scope of [
+          sesion.scope,
+          decodeJwt(sesion.access_token).scope,
+          refrescada.body.scope,
+          decodeJwt(refrescada.body.access_token).scope,
+        ]) {
+          expect(String(scope).split(' ')).not.toContain(SCOPE_EVENTOS);
+        }
+        expect(perfil.body.scopes).not.toContain(SCOPE_EVENTOS);
+      }
     });
 
     it('con la cuenta desactivada después del login responde 401', async () => {

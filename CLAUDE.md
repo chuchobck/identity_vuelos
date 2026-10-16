@@ -30,8 +30,9 @@ publica sus claves públicas en `/.well-known/jwks.json`. El core
 
 - Por capas, como el core: `<entidad>.routes.ts` → controller → service → repository (el único
   archivo que usa Prisma), mapper y `dto/`. Una sola tabla de rutas: `src/routes/index.routes.ts`.
-- `src/modules/`: `auth` (personas), `oauth2` (clientes), `claves` (claves, firma y
-  verificación), `descubrimiento` (JWKS y openid-configuration), `auditoria` y `salud`.
+- `src/modules/`: `auth` (personas; `auth/administradores` es `/admin/users`, copia del core),
+  `oauth2` (clientes), `claves` (claves, firma y verificación), `descubrimiento` (JWKS y
+  openid-configuration), `auditoria` y `salud`.
 - `src/cli/`: herramientas de línea de comandos (`keys:generate`, `cliente:crear`,
   `openapi:export`), compiladas con el resto: también corren dentro de la imagen.
 - Lo propio cuelga de `/identity/v1`; `/.well-known/*` y `/oauth2/token` van en la raíz (los
@@ -47,8 +48,8 @@ publica sus claves públicas en `/.well-known/jwks.json`. El core
 - Un cambio en cómo se firma o se verifica se prueba contra el verificador independiente
   (`test/utils/verificador.ts`, jose + JWKS por HTTP), no solo contra `TokensService`.
 - Los scopes de cada rol están en `src/modules/auth/scopes.ts` (la tabla del core); los de cada
-  cliente, en `cliente_oauth.scopes_permitidos`. Un cliente solo recibe `flights:admin` si lo
-  tiene permitido y lo pide.
+  cliente, en `cliente_oauth.scopes_permitidos`. Un cliente solo recibe `flights:admin` o
+  `events:publish` si lo tiene permitido y lo pide; ningún rol de persona tiene `events:publish`.
 
 ## Seguridad
 
@@ -70,6 +71,9 @@ publica sus claves públicas en `/.well-known/jwks.json`. El core
 ## Datos
 
 - La base es la fuente de verdad (`db/*.sql`, esquema `identidad`); no se usa `prisma migrate`.
+  Un cambio de esquema va en `db/esquema_identidad.sql` y, para las bases que ya existen, en una
+  migración idempotente y aditiva de `db/migraciones/` (`db/migrar.sh`); CI exige que las dos
+  den la misma base.
 - Eliminación lógica siempre: nada de `DELETE` físico (la extensión de Prisma lo bloquea).
   `auditoria_seguridad` es de solo inserción (un trigger lo impone).
 - `db/reset.sh` borra solo el esquema `identidad`, nunca la base.

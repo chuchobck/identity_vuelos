@@ -5,6 +5,7 @@ import {
   descubrimientoEnLaRaiz,
   descubrimientoRoutes,
 } from '../modules/descubrimiento/descubrimiento.routes';
+import { administradoresRoutes } from '../modules/auth/administradores/administradores.routes';
 import { authRoutes } from '../modules/auth/auth.routes';
 import { oauth2EnLaRaiz, oauth2Routes } from '../modules/oauth2/oauth2.routes';
 import { RUTA_TOKEN } from '../modules/oauth2/ruta-token';
@@ -35,12 +36,20 @@ export const RUTAS_EN_LA_RAIZ: RouteInfo[] = [...descubrimientoEnLaRaiz, ...oaut
 export const rutas: Routes = [
   ...saludRoutes,
   ...authRoutes,
+  ...administradoresRoutes,
   ...oauth2Routes,
   ...descubrimientoRoutes,
 ];
 
-/** Rutas cuyas respuestas no se guardan en ninguna caché: entregan tokens o datos de la cuenta. */
-export const RUTAS_SIN_CACHE = [`/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/auth/`, RUTA_TOKEN];
+/**
+ * Rutas cuyas respuestas no se guardan en ninguna caché: entregan tokens, datos de la cuenta o
+ * la lista de administradores.
+ */
+export const RUTAS_SIN_CACHE = [
+  `/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/auth/`,
+  `/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/admin/`,
+  RUTA_TOKEN,
+];
 
 /** Las rutas de RUTAS_EN_LA_RAIZ, en el formato de `setGlobalPrefix({ exclude })`. */
 export const excluidasDelPrefijo = (): RouteInfo[] =>

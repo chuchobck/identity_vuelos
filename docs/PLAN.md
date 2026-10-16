@@ -1,6 +1,6 @@
 # Plan — Quinde · Identity
 
-Actualizado: 2026-10-15 (cierre de la fase 4a) · Este archivo se actualiza al cerrar cada fase.
+Actualizado: 2026-10-16 (cierre de la fase 4c) · Este archivo se actualiza al cerrar cada fase.
 
 El Reto 2 separa la identidad del core de vuelos. Hasta ahora el core
 ([backend_vuelos](https://github.com/chuchobck/backend_vuelos)) emitía sus propios JWT HS256 en
@@ -11,8 +11,9 @@ El Reto 2 separa la identidad del core de vuelos. Hasta ahora el core
 
 | Fase | Estado | Verificado |
 | --- | --- | --- |
-| 4a. Servicio de identidad | Hecha en la rama `feat/r2-identity` (2026-10-15); falta la revisión y el merge | Cada commit pasa `lint`, `format:check` y `build` (y `typecheck` desde que existe). `npm test`: 105 pruebas en 9 archivos contra PostgreSQL 16 local, también sobre una base recién cargada como en CI. `npm run test:mutaciones`: 25 de 25 mutaciones detectadas. Con `curl` contra el servicio compilado: register → login → me, refresh, reuso (401 y familia revocada), client_credentials (200 y 401 con `WWW-Authenticate`), JWKS con `Cache-Control: public, max-age=300` y los dos tokens decodificados. La imagen de Docker construye, corre como uid 1000, no puede escribir en `/app/dist`, queda `healthy` y `crear-cliente` funciona dentro |
+| 4a. Servicio de identidad | Fusionada en `main` (pull request #1, 2026-10-15) | Cada commit pasa `lint`, `format:check` y `build` (y `typecheck` desde que existe). `npm test`: 105 pruebas en 9 archivos contra PostgreSQL 16 local, también sobre una base recién cargada como en CI. `npm run test:mutaciones`: 25 de 25 mutaciones detectadas. Con `curl` contra el servicio compilado: register → login → me, refresh, reuso (401 y familia revocada), client_credentials (200 y 401 con `WWW-Authenticate`), JWKS con `Cache-Control: public, max-age=300` y los dos tokens decodificados. La imagen de Docker construye, corre como uid 1000, no puede escribir en `/app/dist`, queda `healthy` y `crear-cliente` funciona dentro |
 | 4b. El core verifica con el JWKS | Pendiente (otra fase, en backend_vuelos) | — |
+| 4c. `/admin/users` y `events:publish` | Hecha en la rama `feat/r2-admin-usuarios` (2026-10-16); falta la revisión y el merge | Cada commit pasa `lint`, `format:check`, `typecheck` y `build`. `npm test`: 154 pruebas en 11 archivos (49 nuevas, entre ellas las dos suites de `/admin/users` del core portadas) contra PostgreSQL 16 local y contra una base cargada como en CI (sin administrador de la semilla, donde corre la prueba del último administrador). `npm run test:mutaciones`: 40 de 40 detectadas (15 nuevas). La migración 001 corrida dos veces sobre una base de la 0.1.0 deja un `pg_dump` igual al de una base nueva. Con `curl` contra el servicio compilado: alta de un administrador (201, `no-store`), 409 y 400, lista paginada, el nuevo inicia sesión con rol `administrador`, `PATCH`/`PUT`/`GET /{id}` 405 y `/reactivate` 404 (como en el core), baja 204 e idempotente, login del dado de baja 401, 409 de la propia cuenta, 404 y 400, auditoría con `actor_id` y sin contraseña, hash ni correo, 403 `insufficient_scope` con un token de cliente, 401 sin token, preflight de CORS con `DELETE`, `cliente:crear` sin `--permitir-eventos` rechazado, el cliente con `events:publish` recibe el scope solo al pedirlo, otro sin permiso recibe `invalid_scope`, ningún login de persona lo trae y el descubrimiento lo publica |
 | Despliegue en Azure | Pendiente (fase posterior) | — |
 
 ## Qué se copió del core y qué cambió
@@ -26,7 +27,8 @@ El Reto 2 separa la identidad del core de vuelos. Hasta ahora el core
 | Token de acceso | Vigencia de 15 minutos, `sub` uuid, `scope` con espacios | RS256 con `jose` en lugar de HS256 con `jsonwebtoken`: el core verificará con la pública del JWKS sin compartir un secreto. Cabecera `typ: at+jwt` y `kid`; `client_id` en los tokens de clientes |
 | Transversal | Entorno validado, X-Request-Id con contexto asíncrono, filtro ProblemDetails, ValidationPipe, `AlmacenLimites` con `Reloj`, `@LimiteEstricto`, helmet, CORS por lista, 100 kB, `TRUST_PROXY`, bloqueo del borrado físico | Logs JSON de una línea (en lugar de `ConsoleLogger` con prefijo). Un error de Prisma va al log sin su mensaje (puede copiar los valores). TypeScript con `strict` (el core lo tiene apagado) |
 | Base | `usuario`, `rol`, `usuario_rol`, `token_refresco` | Esquema `identidad` (no `vuelos`); `cliente_oauth` y `auditoria_seguridad` nuevas; sin la auditoría genérica (`fn_auditar`) ni `transaccionAuditada`: aquí se auditan eventos de seguridad, explícitos desde el service |
-| Fuera | — | `/admin/users`, `ScopesGuard` y todo lo de vuelos: este servicio no tiene rutas con `@Scopes` |
+| `/admin/users` (fase 4c) | Controller, service, repository, mapper y DTO de `src/modules/auth/administradores`; `ScopesGuard`, `@Scopes`, `UuidPipe` y la paginación por cursor del catálogo; las mismas dos suites de pruebas | Auditoría en `auditoria_seguridad` (con `actor_id`) en lugar de `transaccionAuditada`; los intentos rechazados también quedan. La hora de la revocación sale del `Reloj`. `@Scopes` no declara `OAuth2Security` en Swagger: el token de un cliente no entra |
+| Fuera | — | Todo lo de vuelos |
 
 ## Decisiones
 
@@ -59,6 +61,20 @@ Tomadas sin consultar, con la lectura más razonable del pedido.
 | `jose` 6 | Se usa la versión actual, solo ESM | Node 22 la carga con `require` (require(esm)). Para Jest hay un transformador propio (ver Hallazgos). El core necesitará lo mismo en la fase 4b |
 | CLI | `keys:generate`, `cliente:crear` y `openapi:export` en `src/cli/`, compiladas con el servicio | También corren dentro de la imagen (`node dist/cli/...`), sin ts-node |
 
+### Fase 4c
+
+| Tema | Decisión | Por qué |
+| --- | --- | --- |
+| Cambio de rol y reactivación | No se implementan: solo `POST`, `GET` y `DELETE /{id}`, como el core | El pedido decía "las mismas operaciones" y "copia las reglas, no las inventes"; el core no tiene esas rutas y el backoffice dice que no usa `get`, `update` ni `reactivate` de administradores. Cambiar un rol o reactivar sigue siendo SQL (como en el core); si hacen falta, son una fase que también cambia el core o el backoffice |
+| Token de un cliente OAuth en `/admin/users` | 401 `invalid_token`, aunque traiga `flights:admin` | La regla de CLAUDE.md: las rutas de este servicio que piden token son de personas. Así un administrador queda atado a una persona (`actor_id` es FK a `usuario`) |
+| Auditoría de `/admin/users` | `ADMINISTRADOR_CREADO` y `ADMINISTRADOR_DADO_DE_BAJA` con `usuario_id` (la cuenta) y `actor_id` (el `sub` del administrador), dentro de la transacción del cambio; los rechazos (correo repetido, propia cuenta, último administrador) como `FALLO` fuera de ella. La baja repetida no deja fila. El 404 tampoco (no hay cuenta a la que apuntar) | Un cambio de permisos no puede quedar sin rastro: si la auditoría falla, el cambio se revierte (500). En los demás eventos se mantiene la regla de la 4a: la auditoría no tumba la petición |
+| `actor_id` | Columna nueva, al final de la tabla, con FK a `usuario` | Separa quién hizo el cambio de la cuenta afectada sin cambiar el significado de `usuario_id`. Al final para que una base migrada y una nueva sean iguales columna a columna |
+| `events:publish` | Scope de `SCOPES`, fuera de `SCOPES_POR_ROL`; `administrador` lista sus seis scopes uno por uno; sin `scope`, un cliente no lo recibe (`SCOPES_SOLO_A_PEDIDO`); el alta exige `--permitir-eventos` (no basta `--permitir-admin`) | Lo pedido: solo un cliente máquina a máquina con el scope permitido de forma explícita, y nunca por defecto. Con la lista explícita, un scope nuevo en `SCOPES` no le llega a una persona por accidente |
+| Migraciones | `db/migraciones/NNN_*.sql`, idempotentes y solo aditivas; `db/migrar.sh` las corre; `db/reset.sh` también (en una base nueva no cambian nada); CI exige que una base de la 0.1.0 migrada dos veces sea igual a una nueva | El pedido pidió una migración idempotente para las bases existentes. Sin `prisma migrate` (CLAUDE.md), un script y una prueba de igualdad evitan que el esquema y las migraciones se separen |
+| CORS | `DELETE` entre los métodos permitidos | El backoffice da de baja administradores desde el navegador |
+| `no-store` | También en `/identity/v1/admin/` | La lista lleva correos de cuentas con permisos de administración |
+| Versión | 0.2.0 | Agregados compatibles (rutas y un scope) |
+
 ## Hallazgos
 
 | Tema | Qué pasó | Qué implica |
@@ -71,21 +87,32 @@ Tomadas sin consultar, con la lectura más razonable del pedido.
 | Emisor local en producción | Se comparaba `host` (con puerto) en vez de `hostname` | Corregido; lo encontró la prueba del entorno |
 | Rutas inexistentes y el límite | Un 404 no pasa por los guards, así que no cuenta en el límite global (como en el core) | La prueba de la salud usa una ruta real para agotar el límite |
 | Docker en esta máquina | El `docker build` no tiene salida a npm sin el proxy y la CA de este entorno | Se verificó con una variante local del Dockerfile que agrega el proxy y la CA (no está en el repo); el Dockerfile del repo se construye en CI |
+| La 0.2.0 sobre una base sin migrar | Arranca, pero cada fila de auditoría falla con P2022 (falta `actor_id`): el login sigue y el evento se pierde; un alta o una baja de `/admin/users` responde 500 | `docs/DEPLOY.md` pide correr `db/migrar.sh` antes de desplegar. Se comprobó levantando la 0.2.0 sobre una base con el esquema de la 0.1.0 |
+| `PATCH`/`PUT`/`GET /admin/users/{id}` | Responden 405 (la ruta existe con `DELETE`), como en el core, que tiene el mismo `traducir-excepcion.ts` | La respuesta es idéntica a la del core |
+| La prueba del último administrador | Se omite (con aviso) si hay un administrador fuera de las pruebas, como en el core. En una base local con `SEED_ADMIN_PASSWORD` no corre | Corre en CI (la semilla va sin administrador). La mutación `ultimo-admin` se comprueba con `DATABASE_URL` de una base así |
 | `npm audit` | Las dependencias de producción de Nest 10 traen avisos (`@nestjs/core`, `body-parser`, `multer`, `qs`, `lodash`, `file-type`) | Los mismos que el core; el arreglo es Nest 11 (ver Pendientes). El servicio no usa multipart y fija el límite del cuerpo |
 
 ## Pendientes
 
-- [ ] Dueño del repo: revisar y fusionar el pull request de `feat/r2-identity`.
+- [ ] Dueño del repo: revisar y fusionar el pull request de `feat/r2-admin-usuarios`.
+- [ ] Al desplegar la 0.2.0: correr `./db/migrar.sh` contra la base antes de la imagen nueva.
 - [ ] Fase 4b (core): verificar con el JWKS de este servicio (ver `docs/DEPLOY.md`, "Lo que
-      necesita el core"), quitar `src/modules/auth` del core (y `JWT_SECRET`), mover
-      `/admin/users` a este servicio o a una herramienta, y decidir qué pasa con las cuentas que
-      hoy viven en `vuelos.usuario` (migrarlas a `identidad.usuario` con su mismo uuid, para no
-      romper `id_propietario`).
+      necesita el core"), quitar `src/modules/auth` del core (y `JWT_SECRET`) y decidir qué pasa
+      con las cuentas que hoy viven en `vuelos.usuario` (migrarlas a `identidad.usuario` con su
+      mismo uuid, para no romper `id_propietario`). `/admin/users` ya está aquí.
+- [ ] Backoffice: mandar `/auth/*` y `/admin/users` a la URL de este servicio (ver
+      `docs/DEPLOY.md`, "Lo que cambia para el backoffice") y agregar su origen a
+      `CORS_ORIGINS`.
+- [ ] Core: cuando publique eventos, sumar `events:publish` a su tabla de scopes y pedir un
+      cliente con `cliente:crear --permitir-eventos`.
 - [ ] Fase 4b (frontend): cambiar la URL de `/flights/v1/auth` por `/identity/v1/auth`.
 - [ ] Despliegue en Azure (fase posterior): imagen, base, `JWT_SIGNING_KEY` en el gestor de
       secretos, `JWT_ISSUER` con el dominio https, `TRUST_PROXY` según el balanceador.
 - [ ] Administración de clientes: no hay herramienta para dar de baja un cliente ni para cambiar
-      su secreto (hoy es SQL, ver `docs/DEPLOY.md`), ni para administrar personas y roles.
+      su secreto (hoy es SQL, ver `docs/DEPLOY.md`). De personas: cambiar un rol o reactivar a
+      un administrador sigue siendo SQL, como en el core.
+- [ ] Límite conocido: la baja de un administrador no corta su token de acceso vigente (15
+      minutos), como en el core.
 - [ ] Límite conocido: quien conoce un `client_id` puede agotar su cupo de 10 por minuto (el
       cliente legítimo recibe 429 ese minuto). Si molesta, contar solo los intentos fallidos.
 - [ ] Límite conocido: el rechazo por el límite por IP (el guard) no queda en

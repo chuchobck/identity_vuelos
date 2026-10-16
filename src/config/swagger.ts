@@ -3,7 +3,7 @@ import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 
 export const RUTA_SWAGGER = 'api/docs';
 /** Versión del servicio (la de package.json). */
-export const VERSION_SERVICIO = '0.1.0';
+export const VERSION_SERVICIO = '0.2.0';
 const TITULO = 'Quinde · Identity';
 
 /** Nombre del esquema bearer de Swagger (el del botón Authorize). */
@@ -12,6 +12,7 @@ export const ESQUEMA_BEARER = 'bearer';
 /** Etiquetas de Swagger, en el orden en que se muestran. */
 export const ETIQUETAS = {
   auth: 'Auth',
+  adminUsuarios: 'Admin · Administradores',
   oauth2: 'OAuth 2.0',
   descubrimiento: 'Descubrimiento',
   salud: 'Salud',
@@ -19,6 +20,8 @@ export const ETIQUETAS = {
 
 const DESCRIPCIONES: Record<keyof typeof ETIQUETAS, string> = {
   auth: 'Cuentas de personas: registro, login, refresh con rotación, logout y perfil (la misma forma que /flights/v1/auth del core).',
+  adminUsuarios:
+    'Altas, lista y bajas de administradores (scope flights:admin, solo con el token de una persona): las mismas rutas, cuerpos y errores que /flights/v1/admin/users del core. DELETE da de baja (activo = false), no borra.',
   oauth2:
     'Acceso máquina a máquina (RFC 6749, grant client_credentials). Errores con el formato de RFC 6749, no ProblemDetails.',
   descubrimiento:

@@ -8,12 +8,19 @@
 //
 // Una mutación cuyo texto ya no está en el código (alguien cambió esa línea) cuenta como fallo
 // del script: hay que actualizarla aquí. No corre en CI: tarda unos minutos.
+//
+// ultimo-admin necesita una base sin administradores fuera de las pruebas, como la de CI (la
+// semilla sin SEED_ADMIN_PASSWORD): DATABASE_URL=... npm run test:mutaciones
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const TOKENS = 'src/modules/claves/tokens.service.ts';
 const AUTH = 'src/modules/auth/auth.service.ts';
 const OAUTH = 'src/modules/oauth2/oauth2.service.ts';
+const SCOPES = 'src/modules/auth/scopes.ts';
+const ADMINS = 'src/modules/auth/administradores/administradores.service.ts';
+const ADMINS_REPO = 'src/modules/auth/administradores/administradores.repository.ts';
+const ADMINS_E2E = 'test/admin-usuarios.e2e-spec.ts';
 
 /** nombre, archivo, cambios [buscar, reemplazar], prueba y filtro (-t) que debe fallar. */
 const MUTACIONES = [
@@ -120,12 +127,50 @@ const MUTACIONES = [
     archivo: OAUTH,
     cambios: [
       [
-        '(scope) => scope !== SCOPE_ADMINISTRACION && permitidos.has(scope)',
+        '(scope) => !SCOPES_SOLO_A_PEDIDO.includes(scope) && permitidos.has(scope)',
         '(scope) => permitidos.has(scope)',
       ],
     ],
     prueba: 'test/oauth2.e2e-spec.ts',
     filtro: 'permitido pero no pedido',
+  },
+  {
+    nombre: 'eventos-rol: el rol administrador recibe events:publish',
+    archivo: SCOPES,
+    cambios: [['  administrador: [\n', "  administrador: [\n    'events:publish',\n"]],
+    prueba: 'test/auth.e2e-spec.ts',
+    filtro: 'ningún rol de persona recibe events:publish',
+  },
+  {
+    nombre: 'eventos-implicito: un cliente recibe events:publish sin pedirlo',
+    archivo: SCOPES,
+    cambios: [['= [SCOPE_ADMINISTRACION, SCOPE_EVENTOS];', '= [SCOPE_ADMINISTRACION];']],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'nunca por defecto',
+  },
+  {
+    nombre: 'eventos-pedido: un cliente sin events:publish permitido lo recibe si lo pide',
+    archivo: OAUTH,
+    cambios: [
+      [
+        '(scope) => !esScope(scope) || !permitidos.has(scope)',
+        "(scope) => !esScope(scope) || (!permitidos.has(scope) && scope !== 'events:publish')",
+      ],
+    ],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'pedido sin tenerlo permitido',
+  },
+  {
+    nombre: 'eventos-alta: --permitir-admin basta para dar de alta un cliente con events:publish',
+    archivo: 'src/modules/oauth2/clientes/alta-cliente.ts',
+    cambios: [
+      [
+        '(pedidos.includes(SCOPE_EVENTOS) && !datos.permitirEventos)',
+        '(pedidos.includes(SCOPE_EVENTOS) && !datos.permitirEventos && !datos.permitirAdmin)',
+      ],
+    ],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'el alta con events:publish',
   },
   {
     nombre: 'cliente-inactivo: un cliente dado de baja recibe token',
@@ -252,6 +297,106 @@ const MUTACIONES = [
     cambios: [["    summary: 'Cerrar sesión',", "    summary: 'Cerrar la sesión',"]],
     prueba: 'test/openapi.e2e-spec.ts',
     filtro: 'está al día',
+  },
+  {
+    nombre: 'admin-scope: /admin/users sin el requisito de flights:admin',
+    archivo: 'src/modules/auth/administradores/administradores.controller.ts',
+    cambios: [['@Scopes(SCOPE_ADMINISTRACION)\n', '']],
+    prueba: ADMINS_E2E,
+    filtro: '403 insufficient_scope',
+  },
+  {
+    nombre: 'scopes-guard: el guard de scopes no está registrado',
+    archivo: 'src/modules/auth/auth.module.ts',
+    cambios: [['    { provide: APP_GUARD, useClass: ScopesGuard },\n', '']],
+    prueba: ADMINS_E2E,
+    filtro: '403 insufficient_scope',
+  },
+  {
+    nombre: 'admin-maquina: el token de un cliente OAuth con flights:admin entra a /admin/users',
+    archivo: 'src/common/guards/jwt-auth.guard.ts',
+    cambios: [['if (identidad.clientId !== undefined) {', 'if (identidad.clientId === "nadie") {']],
+    prueba: ADMINS_E2E,
+    filtro: 'token de un cliente OAuth',
+  },
+  {
+    nombre:
+      'auditoria-contrasena: el alta de un administrador guarda la contraseña en la auditoría',
+    archivo: ADMINS,
+    cambios: [
+      [
+        "          evento: 'ADMINISTRADOR_CREADO',\n          resultado: 'EXITO',\n",
+        "          evento: 'ADMINISTRADOR_CREADO',\n          resultado: 'EXITO',\n          motivo: dto.password as never,\n",
+      ],
+    ],
+    prueba: 'test/auditoria.e2e-spec.ts',
+    filtro: 'ninguna fila de auditoría',
+  },
+  {
+    nombre:
+      'loguea-contrasena-admin: el alta de un administrador escribe correo y contraseña en el log',
+    archivo: ADMINS,
+    cambios: [
+      [
+        '    const id = randomUUID();\n',
+        "    const id = randomUUID();\n    new (require('@nestjs/common').Logger)('Admin').log(`alta ${dto.email} ${dto.password}`);\n",
+      ],
+    ],
+    prueba: 'test/auditoria.e2e-spec.ts',
+    filtro: 'ninguna fila de auditoría',
+  },
+  {
+    nombre: 'auditoria-actor: la baja de un administrador no anota quién la pidió',
+    archivo: ADMINS,
+    cambios: [
+      [
+        "        evento: 'ADMINISTRADOR_DADO_DE_BAJA',\n        resultado: 'EXITO',\n        usuarioId: id,\n        actorId: idSolicitante,\n",
+        "        evento: 'ADMINISTRADOR_DADO_DE_BAJA',\n        resultado: 'EXITO',\n        usuarioId: id,\n",
+      ],
+    ],
+    prueba: ADMINS_E2E,
+    filtro: 'da de baja: 204',
+  },
+  {
+    nombre: 'propia-cuenta: un administrador puede darse de baja a sí mismo',
+    archivo: ADMINS_REPO,
+    cambios: [["      if (id === idSolicitante) return 'es-el-mismo';\n", '']],
+    prueba: ADMINS_E2E,
+    filtro: 'propia cuenta',
+  },
+  {
+    // Necesita una base sin administradores fuera de las pruebas (como la de CI): con el de la
+    // semilla, esa prueba se omite y la mutación sobrevive.
+    nombre: 'ultimo-admin: se puede dar de baja al último administrador activo',
+    archivo: ADMINS_REPO,
+    cambios: [
+      ["      if (activos.filter((a) => a.id !== id).length === 0) return 'es-el-ultimo';\n", ''],
+    ],
+    prueba: ADMINS_E2E,
+    filtro: 'único administrador',
+  },
+  {
+    nombre: 'baja-sin-revocar: la baja de un administrador deja vigentes sus refresh tokens',
+    archivo: ADMINS_REPO,
+    cambios: [
+      ['      await revocar();\n      await alDarDeBaja(tx);', '      await alDarDeBaja(tx);'],
+    ],
+    prueba: ADMINS_E2E,
+    filtro: 'revoca sus refresh tokens',
+  },
+  {
+    nombre: 'cors-delete: el preflight no deja dar de baja desde el backoffice',
+    archivo: 'src/config/seguridad.ts',
+    cambios: [["methods: ['GET', 'HEAD', 'POST', 'DELETE'],", "methods: ['GET', 'HEAD', 'POST'],"]],
+    prueba: 'test/transversal.e2e-spec.ts',
+    filtro: 'preflight',
+  },
+  {
+    nombre: 'no-store-admin: la lista de administradores se puede guardar en caché',
+    archivo: 'src/routes/index.routes.ts',
+    cambios: [['  `/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/admin/`,\n', '']],
+    prueba: ADMINS_E2E,
+    filtro: 'no-store',
   },
   {
     nombre: 'clave-corta: el entorno acepta RSA de 1024 bits',

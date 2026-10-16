@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { motivo_revocacion } from '../../generated/prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService, TransaccionIdentidad } from '../../prisma/prisma.service';
 
 /** Usuario con sus roles vigentes (asignación activa y rol activo). */
 export interface UsuarioConRoles {
@@ -52,13 +52,15 @@ export class AuthRepository {
 
   /**
    * Crea el usuario y le asigna `codigoRol` en la misma transacción. Un correo repetido
-   * falla por uq_usuario_correo y el filtro de errores lo responde como 409.
+   * falla por uq_usuario_correo y el filtro de errores lo responde como 409. `alCrear` corre
+   * dentro de esa transacción (el alta de un administrador deja ahí su evento de auditoría).
    */
   async crearUsuario(
     id: string,
     correo: string,
     hashContrasena: string,
     codigoRol: string,
+    alCrear?: (tx: TransaccionIdentidad) => Promise<void>,
   ): Promise<UsuarioConRoles> {
     const fila = await this.prisma.transaccion(async (tx) => {
       const rol = await tx.rol.findFirst({ where: { codigo: codigoRol, activo: true } });
@@ -66,7 +68,7 @@ export class AuthRepository {
         // Error de configuración: no llega al cliente (500) y queda en el log.
         throw new Error(`Falta el rol "${codigoRol}": carga db/semilla_identidad.sql`);
       }
-      return tx.usuario.create({
+      const creado = await tx.usuario.create({
         data: {
           id,
           correo,
@@ -75,6 +77,8 @@ export class AuthRepository {
         },
         include: CON_ROLES,
       });
+      await alCrear?.(tx);
+      return creado;
     });
     return aUsuario(fila);
   }

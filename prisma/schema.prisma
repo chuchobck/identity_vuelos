@@ -23,12 +23,15 @@ model auditoria_seguridad {
   correo_parcial String?
   direccion_ip   String?             @db.Inet
   id_peticion    String?
+  actor_id       String?             @db.Uuid
+  actor          usuario?            @relation("auditoria_seguridad_actor_idTousuario", fields: [actor_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_actor")
   cliente_oauth  cliente_oauth?      @relation(fields: [cliente_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_cliente")
   usuario        usuario?            @relation(fields: [usuario_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_usuario")
 
   @@index([cliente_id, fecha_evento], map: "ix_auditoria_seguridad_cliente", where: raw("(cliente_id IS NOT NULL)"))
   @@index([fecha_evento], map: "ix_auditoria_seguridad_fecha")
   @@index([usuario_id, fecha_evento], map: "ix_auditoria_seguridad_usuario", where: raw("(usuario_id IS NOT NULL)"))
+  @@index([actor_id, fecha_evento], map: "ix_auditoria_seguridad_actor", where: raw("(actor_id IS NOT NULL)"))
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -80,14 +83,15 @@ model token_refresco {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model usuario {
-  id                  String                @id(map: "pk_usuario") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  correo              String                @unique(map: "uq_usuario_correo")
-  hash_contrasena     String
-  activo              Boolean               @default(true)
-  fecha_creacion      DateTime              @default(now()) @db.Timestamptz(6)
-  auditoria_seguridad auditoria_seguridad[]
-  token_refresco      token_refresco[]
-  usuario_rol         usuario_rol[]
+  id                   String                @id(map: "pk_usuario") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  correo               String                @unique(map: "uq_usuario_correo")
+  hash_contrasena      String
+  activo               Boolean               @default(true)
+  fecha_creacion       DateTime              @default(now()) @db.Timestamptz(6)
+  auditoria_como_actor auditoria_seguridad[] @relation("auditoria_seguridad_actor_idTousuario")
+  auditoria_seguridad  auditoria_seguridad[]
+  token_refresco       token_refresco[]
+  usuario_rol          usuario_rol[]
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -114,6 +118,8 @@ enum evento_seguridad {
   ACCESO_CUENTA_INACTIVA
   TOKEN_CLIENTE
   CLIENTE_CREADO
+  ADMINISTRADOR_CREADO
+  ADMINISTRADOR_DADO_DE_BAJA
 }
 
 /// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

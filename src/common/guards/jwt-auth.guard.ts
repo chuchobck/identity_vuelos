@@ -18,7 +18,7 @@ const NO_ES_DE_PERSONA = 'The access token does not belong to a user account';
  * - Sin cabecera Authorization, o con otro esquema: 401 con `WWW-Authenticate: Bearer realm=...`
  * - Token vencido, mal firmado, de otro emisor o audiencia: 401 con `error="invalid_token"`
  * - Token de un cliente OAuth (lleva client_id): 401 `invalid_token`; las rutas de este
- *   servicio que piden token (/auth/me, /auth/logout) son de personas.
+ *   servicio que piden token (/auth/me, /auth/logout, /admin/users) son de personas.
  *
  * El token nunca va al log ni a la respuesta.
  */

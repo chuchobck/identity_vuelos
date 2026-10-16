@@ -9,7 +9,8 @@ cualquier lugar que corra un contenedor y tenga un PostgreSQL.
 - **Una imagen de Docker** (`Dockerfile`, multi-etapa). Corre como el usuario `node` (uid 1000),
   sin privilegios y sin poder escribir en su propio código. No lleva claves ni credenciales:
   todo llega por variables de entorno.
-- **Un PostgreSQL** con el esquema `identidad` (`db/esquema_identidad.sql`).
+- **Un PostgreSQL** con el esquema `identidad` (`db/esquema_identidad.sql` en una base nueva;
+  `db/migrar.sh` en una que ya existe, ver "Migraciones").
 - **Rutas de salud**, públicas y sin límite de peticiones:
   - `GET /identity/v1/health`: el proceso responde (no mira la base). Para reiniciar un
     contenedor colgado. Es la del `HEALTHCHECK` de la imagen.
@@ -36,7 +37,7 @@ no levanta y el error nombra la variable (nunca muestra su valor). Una variable 
 | `JWT_SIGNING_KEY` | Sí | salida de `npm run keys:generate` | No arranca. Tampoco si no es RSA, tiene menos de 2048 bits, es una pública o es el PEM sin base64 |
 | `JWT_PREVIOUS_PUBLIC_KEY` | No | la pública del par anterior | Solo existe la clave actual: los tokens firmados con otra no verifican. Se usa durante una rotación |
 | `JWT_AUDIENCE` | No | `quinde-vuelos-api` | Vale `quinde-vuelos-api`, el `aud` que el core ya acepta |
-| `CORS_ORIGINS` | No | `https://quinde.example.com,http://localhost:5173` | Ningún origen de navegador puede llamar. Nunca `*` (no arranca) |
+| `CORS_ORIGINS` | No | `https://quinde.example.com,http://localhost:5173` | Ningún origen de navegador puede llamar. Nunca `*` (no arranca). Tiene que incluir el origen del frontend y el del backoffice (este da de baja administradores con `DELETE` desde el navegador) |
 | `TRUST_PROXY` | No | `1` | Se usa la IP del socket: detrás de un balanceador, todos los clientes comparten el límite por IP y la auditoría guarda la IP del balanceador. `true` no se acepta |
 | `RATE_LIMIT_MAX` | No | `100` | 100 peticiones por IP y por ventana en todo el servicio |
 | `RATE_LIMIT_WINDOW_SECONDS` | No | `60` | 60 segundos |
@@ -133,6 +134,42 @@ contenedor de `docker-compose.yml`.
 No se usa `prisma migrate`: la base nace de `db/*.sql` y Prisma solo introspecciona
 (`npm run prisma:pull`).
 
+### Migraciones
+
+Una base nueva sale de `db/reset.sh` con el esquema al día. Una que ya existe (la de la versión
+0.1.0, con cuentas reales) se pone al día con `db/migrar.sh`, que corre `db/migraciones/*.sql` en
+orden. Las migraciones solo agregan y son idempotentes: correr `migrar.sh` dos veces deja la base
+igual, por eso no pide confirmación. CI migra una base con el esquema de la 0.1.0 dos veces y
+exige que `pg_dump` la vea igual a una nueva.
+
+```bash
+DATABASE_URL="postgresql://...@host/identity_db?schema=identidad&sslmode=require" ./db/migrar.sh
+```
+
+**0.1.0 → 0.2.0** (`001_admin_usuarios_y_events_publish.sql`). Correr la migración **antes** de
+desplegar la imagen 0.2.0: la 0.2.0 escribe `actor_id` en cada fila de auditoría y, sin la
+columna, un alta o una baja de `/admin/users` falla (500) y los demás eventos no se registran. La
+0.1.0 sigue funcionando con la base ya migrada, así que el orden es seguro:
+
+1. `./db/migrar.sh` contra la base.
+2. Desplegar la imagen 0.2.0.
+
+Qué cambia:
+
+- `evento_seguridad` suma `ADMINISTRADOR_CREADO` y `ADMINISTRADOR_DADO_DE_BAJA`.
+- `auditoria_seguridad` suma `actor_id uuid` (FK a `usuario`, índice parcial).
+- El CHECK `ck_cliente_oauth_scopes` se reemplaza por uno que admite `events:publish` (hasta 7
+  scopes). Es un `DROP CONSTRAINT IF EXISTS` y un `ADD CONSTRAINT` en la misma transacción: las
+  filas existentes ya cumplen el nuevo, que solo amplía la lista. Sin este cambio,
+  `cliente:crear --permitir-eventos` falla con `violates check constraint`.
+
+Para comprobarlo:
+
+```sql
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_cliente_oauth_scopes';
+SELECT unnest(enum_range(NULL::identidad.evento_seguridad));
+```
+
 ## Clientes OAuth (client_credentials)
 
 No hay endpoint para crearlos. Se crean con la herramienta, que imprime el secreto **una sola
@@ -141,6 +178,7 @@ vez** (en la base queda su hash argon2id):
 ```bash
 npm run cliente:crear -- --nombre "Agencia Andina" --scopes "flights:read flights:hold"
 npm run cliente:crear -- --nombre "Batch de catálogo" --scopes "flights:admin" --permitir-admin
+npm run cliente:crear -- --nombre "Core eventos" --scopes "events:publish" --permitir-eventos
 
 # dentro del contenedor desplegado
 docker exec -it <contenedor> node dist/cli/crear-cliente.js --nombre "..." --scopes "..."
@@ -148,6 +186,8 @@ docker exec -it <contenedor> node dist/cli/crear-cliente.js --nombre "..." --sco
 
 - `flights:admin` exige `--permitir-admin`, y aun así el cliente solo lo recibe si lo pide en
   el `scope` de cada token.
+- `events:publish` (publicar eventos; es el del core cuando publique) exige `--permitir-eventos`
+  y, igual, solo sale si se pide (`scope=events:publish`). Ningún rol de persona lo tiene.
 - Dar de baja un cliente (no hay herramienta todavía; ver Pendientes en `docs/PLAN.md`):
   `UPDATE identidad.cliente_oauth SET activo = false WHERE codigo = '...';`
 - Cambiar un secreto: crear un cliente nuevo, pasarle el secreto al sistema que lo usa y dar de
@@ -163,6 +203,8 @@ curl -s -i $BASE/.well-known/jwks.json | grep -i cache       # public, max-age=3
 curl -s -X POST $BASE/identity/v1/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"admin@quinde.example","password":"..."}'     # access_token, refresh_token
 curl -s -u "$CLIENT_ID:$CLIENT_SECRET" -d grant_type=client_credentials $BASE/oauth2/token
+curl -s "$BASE/identity/v1/admin/users?limit=5" -H "Authorization: Bearer $ACCESS_TOKEN_ADMIN"
+curl -s $BASE/.well-known/openid-configuration | grep -o events:publish   # scopes_supported
 ```
 
 ## Lo que necesita el core (fase 4b)
@@ -177,4 +219,22 @@ curl -s -u "$CLIENT_ID:$CLIENT_SECRET" -d grant_type=client_credentials $BASE/oa
 | Claims obligatorios | `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `scope` |
 | `sub` | Un uuid: `usuario.id` (persona) o `cliente_oauth.id` (cliente). Sigue siendo el `id_propietario` de retenciones, reservas y webhooks |
 | `client_id` | Solo en tokens de clientes (client_credentials). Sin él, el token es de una persona |
-| `scope` | Separado por espacios; los mismos 6 scopes de `SCOPES_POR_ROL` |
+| `scope` | Separado por espacios. Los 6 de vuelos (los de `SCOPES_POR_ROL` del core) y `events:publish`, que solo llevan los tokens de clientes |
+
+## Lo que cambia para el backoffice (administradores)
+
+`/identity/v1/admin/users` es `/flights/v1/admin/users` del core con otra base: los mismos
+sufijos (`/admin/users`, `/admin/users/{id}`), métodos, cabeceras (`Authorization: Bearer`,
+`Content-Type: application/json`), cuerpos, status y ProblemDetails. El backoffice manda a este
+servicio el login (`/auth/*`) y los administradores, y deja en el core lo demás (catálogo,
+auditoría y reservas):
+
+| Llamada del backoffice | Antes | Ahora |
+| --- | --- | --- |
+| `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me` | `{core}/flights/v1` | `{identity}/identity/v1` |
+| `/admin/users` (listar, crear, dar de baja) | `{core}/flights/v1` | `{identity}/identity/v1` |
+| Catálogo, `/admin/audit-log`, `/admin/bookings` | `{core}/flights/v1` | Sin cambio (el core tiene que aceptar los tokens RS256 de este servicio: fase 4b) |
+
+Diferencias visibles: el `realm` de `WWW-Authenticate` es `quinde-identity`, y el alta y la baja
+de un administrador quedan en `identidad.auditoria_seguridad` (no en el `/admin/audit-log` del
+core). Este servicio necesita el origen del backoffice en `CORS_ORIGINS`.

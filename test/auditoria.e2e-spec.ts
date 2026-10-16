@@ -18,6 +18,7 @@ import {
 import { LimitesReiniciables } from './utils/limites';
 
 const AUTH = '/identity/v1/auth';
+const ADMIN = '/identity/v1/admin/users';
 
 interface Esperado {
   /** Lo que se hizo, para el mensaje de la prueba. */
@@ -29,6 +30,8 @@ interface Esperado {
   motivo: string | null;
   actor: 'usuario' | 'cliente' | 'ninguno';
   correoParcial?: string;
+  /** actor_id: el administrador que hizo el cambio (solo en /admin/users). */
+  autor?: string;
 }
 
 /**
@@ -263,9 +266,68 @@ describe('Auditoría de seguridad y escaneo de datos sensibles', () => {
       },
     ).expect(400);
 
+    // --- administración (/admin/users) ------------------------------------------------
+    const admin = await crearUsuario(app, { administrador: true });
+    guardar(admin.correo);
+    limites.reiniciar();
+    const sesionAdmin = await http()
+      .post(`${AUTH}/login`)
+      .send({ email: admin.correo, password: admin.contrasena })
+      .expect(200);
+    guardar(sesionAdmin.body.access_token, sesionAdmin.body.refresh_token);
+    const comoAdmin = (prueba: request.Test) =>
+      prueba.set('Authorization', `Bearer ${sesionAdmin.body.access_token}`);
+    const correoNuevo = correoDePrueba();
+    const contrasenaNueva = `${CONTRASENA_PRUEBA} admin ${randomUUID()}`;
+    const contrasenaCorta = randomUUID().slice(0, 11);
+    guardar(correoNuevo, contrasenaNueva, contrasenaCorta);
+
+    const creado = await conId(
+      comoAdmin(http().post(ADMIN).send({ email: correoNuevo, password: contrasenaNueva })),
+      'alta de administrador',
+      {
+        evento: 'ADMINISTRADOR_CREADO',
+        resultado: 'EXITO',
+        motivo: null,
+        actor: 'usuario',
+        autor: admin.id,
+      },
+    ).expect(201);
+    await conId(
+      comoAdmin(
+        http().post(ADMIN).send({ email: correoNuevo.toUpperCase(), password: contrasenaNueva }),
+      ),
+      'alta de administrador repetida',
+      {
+        evento: 'ADMINISTRADOR_CREADO',
+        resultado: 'FALLO',
+        motivo: 'CORREO_REGISTRADO',
+        actor: 'usuario',
+        autor: admin.id,
+      },
+    ).expect(409);
+    // Una contraseña rechazada por corta: el 400 nombra el campo, nunca el valor
+    await comoAdmin(
+      http().post(ADMIN).send({ email: correoDePrueba(), password: contrasenaCorta }),
+    ).expect(400);
+    await conId(comoAdmin(http().delete(`${ADMIN}/${admin.id}`)), 'baja de la propia cuenta', {
+      evento: 'ADMINISTRADOR_DADO_DE_BAJA',
+      resultado: 'FALLO',
+      motivo: 'PROPIA_CUENTA',
+      actor: 'usuario',
+      autor: admin.id,
+    }).expect(409);
+    await conId(comoAdmin(http().delete(`${ADMIN}/${creado.body.id}`)), 'baja de administrador', {
+      evento: 'ADMINISTRADOR_DADO_DE_BAJA',
+      resultado: 'EXITO',
+      motivo: null,
+      actor: 'usuario',
+      autor: admin.id,
+    }).expect(204);
+
     // Los hashes guardados tampoco pueden salir a ningún lado
     const usuarios = await prisma.db.usuario.findMany({
-      where: { correo: { in: [correo, inactiva.correo] } },
+      where: { correo: { in: [correo, inactiva.correo, admin.correo, correoNuevo] } },
     });
     const clientes = await prisma.db.cliente_oauth.findMany({
       where: { id: { in: [cliente.id, inactivo.id] } },
@@ -301,6 +363,7 @@ describe('Auditoría de seguridad y escaneo de datos sensibles', () => {
         ip: fila.direccion_ip,
         actor: fila.usuario_id ? 'usuario' : fila.cliente_id ? 'cliente' : 'ninguno',
         correoParcial: fila.correo_parcial ?? undefined,
+        autor: fila.actor_id ?? undefined,
       }).toEqual({
         accion: esperado.accion,
         evento: esperado.evento,
@@ -309,6 +372,7 @@ describe('Auditoría de seguridad y escaneo de datos sensibles', () => {
         ip: esperado.ip,
         actor: esperado.actor,
         correoParcial: esperado.correoParcial,
+        autor: esperado.autor,
       });
     }
   });
@@ -319,7 +383,7 @@ describe('Auditoría de seguridad y escaneo de datos sensibles', () => {
     for (const fila of creados) expect(fila.cliente_id).not.toBeNull();
   });
 
-  it('ninguna fila de auditoría ni línea de log lleva contraseñas, tokens, secretos ni claves', async () => {
+  it('ninguna fila de auditoría ni línea de log lleva contraseñas, hashes, tokens, secretos, claves ni correos', async () => {
     const filas = JSON.stringify(await filasNuevas(), (_clave, valor: unknown) =>
       typeof valor === 'bigint' ? valor.toString() : valor,
     );
@@ -329,6 +393,8 @@ describe('Auditoría de seguridad y escaneo de datos sensibles', () => {
     expect(logs.length).toBeGreaterThan(40);
     expect(textoLogs).toContain('POST /identity/v1/auth/login 200');
     expect(textoLogs).toContain('POST /oauth2/token 401');
+    expect(textoLogs).toContain('POST /identity/v1/admin/users 201');
+    expect(textoLogs).toContain('POST /identity/v1/admin/users 400');
     expect(sensibles.size).toBeGreaterThan(25);
 
     const filtrados = [...sensibles].filter((v) => filas.includes(v) || textoLogs.includes(v));

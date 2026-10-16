@@ -214,6 +214,84 @@ describe('OAuth 2.0 client_credentials', () => {
     });
   });
 
+  describe('events:publish (solo de máquina a máquina)', () => {
+    it('permitido y pedido: sale, solo o con otros scopes', async () => {
+      const servicio = await crearClienteDePrueba(app, {
+        scopes: 'flights:read events:publish',
+        permitirEventos: true,
+      });
+      const solo = await pedir(
+        { ...CC, scope: 'events:publish' },
+        basic(servicio.clientId, servicio.secreto),
+      ).expect(200);
+      expect(solo.body.scope).toBe('events:publish');
+      expect(decodeJwt(solo.body.access_token)).toMatchObject({
+        scope: 'events:publish',
+        sub: servicio.id,
+        client_id: servicio.clientId,
+      });
+
+      const ambos = await pedir(
+        { ...CC, scope: 'events:publish flights:read' },
+        basic(servicio.clientId, servicio.secreto),
+      ).expect(200);
+      expect(ambos.body.scope).toBe('flights:read events:publish');
+    });
+
+    it('permitido pero no pedido: no sale (nunca por defecto)', async () => {
+      const servicio = await crearClienteDePrueba(app, {
+        scopes: 'flights:read flights:admin events:publish',
+        permitirAdmin: true,
+        permitirEventos: true,
+      });
+      const respuesta = await pedir(CC, basic(servicio.clientId, servicio.secreto)).expect(200);
+      expect(respuesta.body.scope).toBe('flights:read');
+      expect(decodeJwt(respuesta.body.access_token).scope).toBe('flights:read');
+    });
+
+    it('un cliente que solo publica eventos tiene que pedir su scope', async () => {
+      const servicio = await crearClienteDePrueba(app, {
+        scopes: 'events:publish',
+        permitirEventos: true,
+      });
+      esperarErrorOAuth(
+        await pedir(CC, basic(servicio.clientId, servicio.secreto)),
+        400,
+        'invalid_scope',
+      );
+    });
+
+    it('pedido sin tenerlo permitido: invalid_scope 400, aunque tenga flights:admin', async () => {
+      const admin = await crearClienteDePrueba(app, {
+        scopes: 'flights:read flights:admin',
+        permitirAdmin: true,
+      });
+      for (const scope of ['events:publish', 'flights:read events:publish']) {
+        esperarErrorOAuth(
+          await pedir({ ...CC, scope }, basic(admin.clientId, admin.secreto)),
+          400,
+          'invalid_scope',
+        );
+      }
+    });
+
+    it('el alta con events:publish exige --permitir-eventos (no basta --permitir-admin)', () => {
+      expect(() => validarAltaCliente({ nombre: 'Core', scopes: 'events:publish' })).toThrow(
+        /--permitir-eventos/,
+      );
+      expect(() =>
+        validarAltaCliente({ nombre: 'Core', scopes: 'events:publish', permitirAdmin: true }),
+      ).toThrow(AltaClienteInvalida);
+      expect(
+        validarAltaCliente({
+          nombre: 'Core',
+          scopes: 'events:publish, flights:read',
+          permitirEventos: true,
+        }).scopes,
+      ).toEqual(['flights:read', 'events:publish']);
+    });
+  });
+
   describe('forma de la petición', () => {
     it('grant_type ajeno: unsupported_grant_type 400', async () => {
       for (const grant_type of ['password', 'authorization_code', 'refresh_token']) {

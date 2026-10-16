@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { obtenerContexto } from '../../common/contexto/contexto-peticion';
 import { esRequestIdValido } from '../../common/contexto/request-id';
 import { evento_seguridad, resultado_seguridad } from '../../generated/prisma/client';
-import { resumirError } from '../../prisma/prisma.service';
+import { resumirError, TransaccionIdentidad } from '../../prisma/prisma.service';
 import { AuditoriaRepository } from './auditoria.repository';
 
 /**
@@ -29,14 +29,22 @@ export type MotivoSeguridad =
   | 'SCOPE_NO_PERMITIDO'
   | 'GRANT_NO_SOPORTADO'
   | 'PETICION_INVALIDA'
-  | 'LIMITE_EXCEDIDO';
+  | 'LIMITE_EXCEDIDO'
+  // /admin/users (el alta repetida usa CORREO_REGISTRADO)
+  | 'PROPIA_CUENTA'
+  | 'ULTIMO_ADMINISTRADOR';
 
 export interface EventoSeguridad {
   evento: evento_seguridad;
   resultado: resultado_seguridad;
   motivo?: MotivoSeguridad;
-  /** usuario.id, si el evento es de una cuenta que existe. */
+  /** usuario.id, si el evento es de una cuenta que existe: la cuenta afectada. */
   usuarioId?: string;
+  /**
+   * Quién hizo el cambio cuando no es la propia cuenta: el `sub` del administrador en un alta
+   * o una baja de /admin/users.
+   */
+  actorId?: string;
   /** cliente_oauth.id, si el evento es de un cliente que existe. */
   clienteId?: string;
   /**
@@ -61,25 +69,40 @@ export class AuditoriaSeguridad {
   constructor(private readonly repositorio: AuditoriaRepository) {}
 
   async registrar(evento: EventoSeguridad): Promise<void> {
-    const contexto = obtenerContexto();
     try {
-      await this.repositorio.insertar({
-        evento: evento.evento,
-        resultado: evento.resultado,
-        motivo: evento.motivo ?? null,
-        usuario_id: evento.usuarioId ?? null,
-        cliente_id: evento.clienteId ?? null,
-        correo_parcial:
-          evento.correoIntentado === undefined ? null : enmascararCorreo(evento.correoIntentado),
-        direccion_ip: contexto?.ip ?? null,
-        id_peticion: contexto && esRequestIdValido(contexto.requestId) ? contexto.requestId : null,
-      });
+      await this.repositorio.insertar(aFila(evento));
     } catch (error) {
       this.logger.error(
         `No se pudo registrar el evento ${evento.evento} ${evento.resultado}: ${resumirError(error)}`,
       );
     }
   }
+
+  /**
+   * Lo mismo, pero dentro de la transacción del cambio que audita (el alta o la baja de un
+   * administrador): o quedan los dos, o ninguno. Aquí un fallo de la auditoría sí revierte el
+   * cambio, porque un cambio de permisos no puede quedar sin su rastro.
+   */
+  async registrarEn(tx: TransaccionIdentidad, evento: EventoSeguridad): Promise<void> {
+    await this.repositorio.insertar(aFila(evento), tx);
+  }
+}
+
+/** La fila, con la IP y el X-Request-Id de la petición en curso. Nunca el correo completo. */
+function aFila(evento: EventoSeguridad) {
+  const contexto = obtenerContexto();
+  return {
+    evento: evento.evento,
+    resultado: evento.resultado,
+    motivo: evento.motivo ?? null,
+    usuario_id: evento.usuarioId ?? null,
+    cliente_id: evento.clienteId ?? null,
+    actor_id: evento.actorId ?? null,
+    correo_parcial:
+      evento.correoIntentado === undefined ? null : enmascararCorreo(evento.correoIntentado),
+    direccion_ip: contexto?.ip ?? null,
+    id_peticion: contexto && esRequestIdValido(contexto.requestId) ? contexto.requestId : null,
+  };
 }
 
 /**
