@@ -4,6 +4,7 @@ import { RouterModule } from '@nestjs/core';
 import { CommonModule } from './common/common.module';
 import { validarEntorno } from './config/entorno';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
+import { AdministradoresModule } from './modules/auth/administradores/administradores.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClavesModule } from './modules/claves/claves.module';
 import { DescubrimientoModule } from './modules/descubrimiento/descubrimiento.module';
@@ -28,6 +29,7 @@ import { rutas } from './routes/index.routes';
     ClavesModule,
     AuditoriaModule,
     AuthModule,
+    AdministradoresModule,
     OAuth2Module,
     DescubrimientoModule,
 

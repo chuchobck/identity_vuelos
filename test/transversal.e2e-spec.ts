@@ -143,5 +143,20 @@ describe('Transversal', () => {
       const ajeno = await http().get('/identity/v1/health').set('Origin', 'https://malo.example');
       expect(ajeno.headers['access-control-allow-origin']).toBeUndefined();
     });
+
+    it('el preflight deja al backoffice dar de baja con DELETE y Authorization (no PUT ni PATCH)', async () => {
+      const respuesta = await http()
+        .options(`/identity/v1/admin/users/${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}`)
+        .set('Origin', 'https://app.e2e.quinde.example')
+        .set('Access-Control-Request-Method', 'DELETE')
+        .set('Access-Control-Request-Headers', 'authorization')
+        .expect(204);
+      expect(respuesta.headers['access-control-allow-origin']).toBe(
+        'https://app.e2e.quinde.example',
+      );
+      const metodos = String(respuesta.headers['access-control-allow-methods']).split(',');
+      expect(metodos).toEqual(['GET', 'HEAD', 'POST', 'DELETE']);
+      expect(respuesta.headers['access-control-allow-headers']).toContain('Authorization');
+    });
   });
 });

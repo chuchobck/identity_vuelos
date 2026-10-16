@@ -35,6 +35,8 @@ describe('Contrato OpenAPI versionado', () => {
     expect(Object.keys(documento.paths).sort()).toEqual([
       '/.well-known/jwks.json',
       '/.well-known/openid-configuration',
+      '/identity/v1/admin/users',
+      '/identity/v1/admin/users/{id}',
       '/identity/v1/auth/login',
       '/identity/v1/auth/logout',
       '/identity/v1/auth/me',
@@ -45,4 +47,31 @@ describe('Contrato OpenAPI versionado', () => {
       '/oauth2/token',
     ]);
   });
+
+  it('/admin/users va con su etiqueta, el candado y sus 400, 401 y 403', () => {
+    const documento = JSON.parse(readFileSync(ARCHIVO_OPENAPI, 'utf8')) as {
+      paths: Record<string, Record<string, Operacion>>;
+      tags: Array<{ name: string }>;
+    };
+    expect(documento.tags.map((etiqueta) => etiqueta.name)).toContain('Admin · Administradores');
+    const operaciones = [
+      documento.paths['/identity/v1/admin/users'].get,
+      documento.paths['/identity/v1/admin/users'].post,
+      documento.paths['/identity/v1/admin/users/{id}'].delete,
+    ];
+    for (const operacion of operaciones) {
+      expect(operacion.tags).toEqual(['Admin · Administradores']);
+      expect(operacion.security).toEqual([{ bearer: [] }]);
+      expect(Object.keys(operacion.responses)).toEqual(
+        expect.arrayContaining(['400', '401', '403']),
+      );
+      expect(operacion.responses['403'].description).toContain('flights:admin');
+    }
+  });
 });
+
+interface Operacion {
+  tags: string[];
+  security: unknown[];
+  responses: Record<string, { description: string }>;
+}

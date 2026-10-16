@@ -5,16 +5,22 @@ import { ErrorNegocio } from '../../common/errores/error-negocio';
 export const REALM = 'quinde-identity';
 
 /** Los códigos de error de RFC 6750 (sección 3.1) que usa el servicio. */
-type ErrorBearer = 'invalid_token';
+type ErrorBearer = 'invalid_token' | 'insufficient_scope';
 
 /**
  * Valor de WWW-Authenticate. Sin `error` es la respuesta a una petición sin credenciales,
- * que según RFC 6750 no debe llevar código de error.
+ * que según RFC 6750 no debe llevar código de error. `scopes` son los que pide la ruta (en un
+ * 403 insufficient_scope), como en el core.
  */
-export function desafioBearer(error?: ErrorBearer, descripcion?: string): string {
+export function desafioBearer(
+  error?: ErrorBearer,
+  descripcion?: string,
+  scopes?: readonly string[],
+): string {
   const partes = [`realm="${REALM}"`];
   if (error) partes.push(`error="${error}"`);
   if (descripcion) partes.push(`error_description="${descripcion}"`);
+  if (scopes && scopes.length > 0) partes.push(`scope="${scopes.join(' ')}"`);
   return `Bearer ${partes.join(', ')}`;
 }
 

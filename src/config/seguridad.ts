@@ -49,7 +49,8 @@ export function configurarSeguridad(
   // `credentials`: los tokens viajan en el cuerpo y en Authorization.
   app.enableCors({
     origin: listarOrigenes(config.get<string>('CORS_ORIGINS')),
-    methods: ['GET', 'HEAD', 'POST'],
+    // DELETE: el backoffice da de baja administradores desde el navegador
+    methods: ['GET', 'HEAD', 'POST', 'DELETE'],
     allowedHeaders: CABECERAS_PERMITIDAS,
     exposedHeaders: CABECERAS_EXPUESTAS,
     maxAge: 600,
