@@ -1,7 +1,7 @@
 # Integración continua: en cada push y pull request a main, una base PostgreSQL 18 nueva con el
-# esquema y la semilla de db/, y luego lint, formato, tipos, compilación y la suite e2e completa
-# (que incluye la prueba de que contracts/identity-openapi.json está al día). Aparte, la imagen
-# de Docker tiene que construir.
+# esquema y la semilla de db/, la prueba de db/migraciones/, y luego lint, formato, tipos,
+# compilación y la suite e2e completa (que incluye la prueba de que contracts/identity-openapi.json
+# está al día). Aparte, la imagen de Docker tiene que construir.
 name: CI
 
 on:
@@ -47,6 +47,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Todo el historial: la prueba de migraciones lee el esquema de ESQUEMA_ANTERIOR
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -66,6 +69,30 @@ jobs:
             echo "Cargando db/${archivo}.sql"
             docker exec -i "$CONTENEDOR" psql -U postgres -d identity_db -v ON_ERROR_STOP=1 -q < "db/${archivo}.sql"
           done
+
+      # Una base con el esquema de la fase 4a (el último que se desplegó sin migraciones) más
+      # db/migrar.sh dos veces tiene que quedar idéntica a una base nueva: así se prueba que las
+      # migraciones son idempotentes y que esquema_identidad.sql no se separa de ellas. La de
+      # pruebas también pasa por migrar.sh (ahí no cambia nada). pg_dump pone una clave al azar
+      # en \restrict: no cuenta.
+      - name: Migraciones (idempotentes y al día con el esquema)
+        env:
+          CONTENEDOR: ${{ job.services.postgres.id }}
+          ESQUEMA_ANTERIOR: bfb5007
+        run: |
+          ./db/migrar.sh
+          docker exec "$CONTENEDOR" psql -U postgres -q -c 'CREATE DATABASE identity_migrada'
+          git show "${ESQUEMA_ANTERIOR}:db/esquema_identidad.sql" \
+            | docker exec -i "$CONTENEDOR" psql -U postgres -d identity_migrada -v ON_ERROR_STOP=1 -q
+          for _ in 1 2; do
+            DATABASE_URL="${DATABASE_URL/identity_db/identity_migrada}" ./db/migrar.sh
+          done
+          volcar() {
+            docker exec "$CONTENEDOR" pg_dump -U postgres --schema-only --schema=identidad "$1" \
+              | grep -vE '^\\(un)?restrict '
+          }
+          diff <(volcar identity_migrada) <(volcar identity_db)
+          echo "La base migrada es igual a la nueva."
 
       - name: Lint
         run: npm run lint
