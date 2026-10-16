@@ -6,8 +6,8 @@
  * DÓNDE VIVE ESTA TABLA: en código y no en la base, a propósito (la misma razón que en el core).
  * - Un scope solo significa algo si un `@Scopes(...)` del core lo exige: agregar uno en la base
  *   sin cambiar el código no protege nada. Cualquier cambio de permisos ya implica desplegar.
- * - Son 2 roles y 7 scopes fijados por el contrato: una tabla `alcance` y otra `rol_alcance`
- *   sumarían dos joins a cada login y refresh sin dar flexibilidad real.
+ * - Son 2 roles y 7 scopes (5 del contrato y 2 del proyecto): una tabla `alcance` y otra
+ *   `rol_alcance` sumarían dos joins a cada login y refresh sin dar flexibilidad real.
  * Lo que sí está en la base es qué rol tiene cada usuario (usuario_rol) y qué scopes puede pedir
  * cada cliente OAuth (cliente_oauth.scopes_permitidos): eso cambia sin desplegar. Los códigos de
  * rol de aquí deben coincidir con los de db/semilla_identidad.sql, y SCOPES con el CHECK
