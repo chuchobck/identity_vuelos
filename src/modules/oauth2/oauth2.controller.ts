@@ -44,9 +44,9 @@ export class OAuth2Controller {
     description:
       'El cliente se autentica con Authorization: Basic (client_secret_basic) o con client_id y ' +
       'client_secret en el formulario (client_secret_post), no con los dos. Sin `scope` recibe ' +
-      'los permitidos menos flights:admin, que solo sale si está permitido y se pide. No hay ' +
-      'refresh_token: cuando el token vence (15 minutos) se pide otro. authorization_code no ' +
-      'está implementado.',
+      'los permitidos menos flights:admin y events:publish, que solo salen si están permitidos ' +
+      'y se piden. No hay refresh_token: cuando el token vence (15 minutos) se pide otro. ' +
+      'authorization_code no está implementado.',
   })
   @ApiConsumes('application/x-www-form-urlencoded')
   @ApiBody({

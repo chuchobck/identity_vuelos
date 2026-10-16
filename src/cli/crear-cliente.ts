@@ -3,6 +3,7 @@
  *
  *   npm run cliente:crear -- --nombre "Agencia Andina" --scopes "flights:read flights:hold"
  *   npm run cliente:crear -- --nombre "Batch catálogo" --scopes "flights:admin" --permitir-admin
+ *   npm run cliente:crear -- --nombre "Core eventos" --scopes "events:publish" --permitir-eventos
  *   npm run cliente:crear -- --nombre "..." --scopes "..." --client-id agencia-andina
  *
  * No hay endpoint para crear clientes: solo esta herramienta, que corre quien tiene acceso a la
@@ -24,6 +25,7 @@ async function principal(): Promise<void> {
       scopes: { type: 'string' },
       'client-id': { type: 'string' },
       'permitir-admin': { type: 'boolean', default: false },
+      'permitir-eventos': { type: 'boolean', default: false },
     },
     strict: true,
   });
@@ -39,6 +41,7 @@ async function principal(): Promise<void> {
       scopes: values.scopes ?? '',
       clientId: values['client-id'],
       permitirAdmin: values['permitir-admin'],
+      permitirEventos: values['permitir-eventos'],
     });
     console.log('Cliente creado. Guarda el secreto ahora: no se vuelve a mostrar.');
     console.log(`client_id:     ${cliente.clientId}`);

@@ -163,6 +163,7 @@ describe('Tokens RS256 y JWKS', () => {
           'flights:cancel',
           'flights:webhooks',
           'flights:admin',
+          'events:publish',
         ],
         id_token_signing_alg_values_supported: ['RS256'],
       });

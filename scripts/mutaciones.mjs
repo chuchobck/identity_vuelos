@@ -14,6 +14,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const TOKENS = 'src/modules/claves/tokens.service.ts';
 const AUTH = 'src/modules/auth/auth.service.ts';
 const OAUTH = 'src/modules/oauth2/oauth2.service.ts';
+const SCOPES = 'src/modules/auth/scopes.ts';
 
 /** nombre, archivo, cambios [buscar, reemplazar], prueba y filtro (-t) que debe fallar. */
 const MUTACIONES = [
@@ -120,12 +121,50 @@ const MUTACIONES = [
     archivo: OAUTH,
     cambios: [
       [
-        '(scope) => scope !== SCOPE_ADMINISTRACION && permitidos.has(scope)',
+        '(scope) => !SCOPES_SOLO_A_PEDIDO.includes(scope) && permitidos.has(scope)',
         '(scope) => permitidos.has(scope)',
       ],
     ],
     prueba: 'test/oauth2.e2e-spec.ts',
     filtro: 'permitido pero no pedido',
+  },
+  {
+    nombre: 'eventos-rol: el rol administrador recibe events:publish',
+    archivo: SCOPES,
+    cambios: [['  administrador: [\n', "  administrador: [\n    'events:publish',\n"]],
+    prueba: 'test/auth.e2e-spec.ts',
+    filtro: 'ningún rol de persona recibe events:publish',
+  },
+  {
+    nombre: 'eventos-implicito: un cliente recibe events:publish sin pedirlo',
+    archivo: SCOPES,
+    cambios: [['= [SCOPE_ADMINISTRACION, SCOPE_EVENTOS];', '= [SCOPE_ADMINISTRACION];']],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'nunca por defecto',
+  },
+  {
+    nombre: 'eventos-pedido: un cliente sin events:publish permitido lo recibe si lo pide',
+    archivo: OAUTH,
+    cambios: [
+      [
+        '(scope) => !esScope(scope) || !permitidos.has(scope)',
+        "(scope) => !esScope(scope) || (!permitidos.has(scope) && scope !== 'events:publish')",
+      ],
+    ],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'pedido sin tenerlo permitido',
+  },
+  {
+    nombre: 'eventos-alta: --permitir-admin basta para dar de alta un cliente con events:publish',
+    archivo: 'src/modules/oauth2/clientes/alta-cliente.ts',
+    cambios: [
+      [
+        '(pedidos.includes(SCOPE_EVENTOS) && !datos.permitirEventos)',
+        '(pedidos.includes(SCOPE_EVENTOS) && !datos.permitirEventos && !datos.permitirAdmin)',
+      ],
+    ],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'el alta con events:publish',
   },
   {
     nombre: 'cliente-inactivo: un cliente dado de baja recibe token',

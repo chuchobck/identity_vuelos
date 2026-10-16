@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { fijarUsuario } from '../../common/contexto/contexto-peticion';
 import { AuditoriaSeguridad, MotivoSeguridad } from '../auditoria/auditoria.service';
-import { esScope, Scope, SCOPE_ADMINISTRACION, SCOPES } from '../auth/scopes';
+import { esScope, Scope, SCOPES, SCOPES_SOLO_A_PEDIDO } from '../auth/scopes';
 import { ContrasenaService } from '../auth/seguridad/contrasena.service';
 import { TokensService } from '../claves/tokens.service';
 import { FORMATO_CLIENT_ID } from './clientes/alta-cliente';
@@ -110,14 +110,15 @@ export class OAuth2Service {
  *
  * - Con `scope`: todos los pedidos tienen que existir y estar permitidos al cliente; si uno no,
  *   invalid_scope (no se entrega un subconjunto en silencio).
- * - Sin `scope`: los permitidos, MENOS flights:admin. Ese scope solo sale si el cliente lo tiene
- *   permitido de forma explícita y además lo pide en esta petición.
+ * - Sin `scope`: los permitidos, MENOS flights:admin y events:publish (SCOPES_SOLO_A_PEDIDO).
+ *   Esos solo salen si el cliente los tiene permitidos de forma explícita y además los pide en
+ *   esta petición.
  */
 export function scopesConcedidos(cliente: ClienteOAuth, pedido: string | undefined): Scope[] {
   const permitidos = new Set(cliente.scopesPermitidos);
   if (pedido === undefined) {
     const porDefecto = SCOPES.filter(
-      (scope) => scope !== SCOPE_ADMINISTRACION && permitidos.has(scope),
+      (scope) => !SCOPES_SOLO_A_PEDIDO.includes(scope) && permitidos.has(scope),
     );
     if (porDefecto.length === 0) {
       throw scopeInvalido('This client must request its scope explicitly');
