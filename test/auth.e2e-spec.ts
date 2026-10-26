@@ -2,7 +2,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import * as request from 'supertest';
 import { decodeJwt } from 'jose';
 import { AuthService } from '../src/modules/auth/auth.service';
-import { SCOPE_EVENTOS, SCOPES_POR_ROL } from '../src/modules/auth/scopes';
+import { SCOPE_EVENTOS, SCOPE_OPERACIONES, SCOPES_POR_ROL } from '../src/modules/auth/scopes';
 import { hashearTokenRefresco } from '../src/modules/auth/seguridad/token-refresco';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { crearApp } from './utils/crear-app';
@@ -173,7 +173,11 @@ describe('Auth de personas', () => {
         expect(respuesta.headers['cache-control']).toBe('no-store');
       }
       const [primero, ...demas] = intentos;
-      for (const respuesta of demas) expect(respuesta.body).toEqual(primero.body);
+      // Salvo el correlation_id, que es de cada petición y no dice nada de la cuenta
+      const sinCorrelacion = ({ correlation_id: _id, ...resto }: Record<string, unknown>) => resto;
+      for (const respuesta of demas) {
+        expect(sinCorrelacion(respuesta.body)).toEqual(sinCorrelacion(primero.body));
+      }
       expect(primero.body.detail).toBe('Invalid email or password');
     });
 
@@ -360,10 +364,38 @@ describe('Auth de personas', () => {
         id: admin.id,
         email: admin.correo,
         roles: expect.arrayContaining(['cliente', 'administrador']),
-        scopes: [...SCOPES_CLIENTE, 'flights:admin'],
+        scopes: [...SCOPES_CLIENTE, 'flights:ops', 'flights:admin'],
       });
-      expect(sesion.scope).toBe([...SCOPES_CLIENTE, 'flights:admin'].join(' '));
+      expect(sesion.scope).toBe([...SCOPES_CLIENTE, 'flights:ops', 'flights:admin'].join(' '));
       expect(respuesta.headers['cache-control']).toBe('no-store');
+    });
+
+    it('flights:ops: el administrador lo trae en login, refresh y /me; el cliente no', async () => {
+      expect(SCOPES_POR_ROL.cliente).not.toContain(SCOPE_OPERACIONES);
+      expect(SCOPES_POR_ROL.administrador).toContain(SCOPE_OPERACIONES);
+      for (const [administrador, esperado] of [
+        [true, true],
+        [false, false],
+      ] as const) {
+        const sesion = await iniciarSesion(app, await crearUsuario(app, { administrador }));
+        const refrescada = await http()
+          .post(`${AUTH}/refresh`)
+          .send({ refresh_token: sesion.refresh_token })
+          .expect(200);
+        const perfil = await http()
+          .get(`${AUTH}/me`)
+          .set('Authorization', `Bearer ${refrescada.body.access_token}`)
+          .expect(200);
+        for (const scope of [
+          sesion.scope,
+          decodeJwt(sesion.access_token).scope,
+          refrescada.body.scope,
+          decodeJwt(refrescada.body.access_token).scope,
+        ]) {
+          expect(String(scope).split(' ').includes(SCOPE_OPERACIONES)).toBe(esperado);
+        }
+        expect(perfil.body.scopes.includes(SCOPE_OPERACIONES)).toBe(esperado);
+      }
     });
 
     it('ningún rol de persona recibe events:publish: ni en el login, ni en el refresh, ni en /me', async () => {

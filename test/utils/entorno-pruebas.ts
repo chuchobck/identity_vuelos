@@ -20,3 +20,5 @@ process.env.PRUEBAS_JWT_PUBLIC_KEY = par.publica;
 process.env.CORS_ORIGINS = 'https://app.e2e.quinde.example';
 // X-Forwarded-For desde 127.0.0.1: las pruebas simulan clientes con IP distintas
 process.env.TRUST_PROXY = 'loopback';
+// Sin puerto de métricas: varias apps de prueba conviven; la prueba de métricas abre el suyo
+process.env.METRICS_PORT = '0';

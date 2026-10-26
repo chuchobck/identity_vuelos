@@ -1,4 +1,5 @@
 import { LoggerService, LogLevel } from '@nestjs/common';
+import { camposDeTraza } from '../../observabilidad/trazas';
 import { obtenerContexto } from '../contexto/contexto-peticion';
 
 /** Adónde va cada línea. Por defecto, la salida estándar; las pruebas pasan un arreglo. */
@@ -18,7 +19,7 @@ const escribirEnConsola: SalidaLog = (linea) => {
 };
 
 /**
- * Logger de la app: una línea JSON por mensaje, con el X-Request-Id de la petición en curso,
+ * Logger de la app: una línea JSON por mensaje, con el X-Request-Id y el X-Correlation-Id de la petición en curso,
  * venga de donde venga (un service, el filtro de errores, el log de acceso):
  *
  *   {"time":"2026-10-15T12:00:00.000Z","level":"log","context":"HTTP","requestId":"8d1f...",
@@ -84,6 +85,10 @@ export class LoggerJson implements LoggerService {
       level: nivel,
       context: contexto,
       requestId: obtenerContexto()?.requestId,
+      correlationId: obtenerContexto()?.correlationId,
+      // De la traza activa: toda línea escrita durante una petición los lleva (docs/OBSERVABILIDAD.md, §3)
+      traceId: camposDeTraza().traceId,
+      spanId: camposDeTraza().spanId,
       message: comoTexto(mensaje),
       stack,
     };

@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ClavesModule } from './modules/claves/claves.module';
 import { DescubrimientoModule } from './modules/descubrimiento/descubrimiento.module';
 import { OAuth2Module } from './modules/oauth2/oauth2.module';
+import { ObservabilidadModule } from './observabilidad/observabilidad.module';
 import { SaludModule } from './modules/salud/salud.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { rutas } from './routes/index.routes';
@@ -24,6 +25,7 @@ import { rutas } from './routes/index.routes';
 
     // CommonModule va primero: el límite de peticiones es el primer guard global.
     PrismaModule,
+    ObservabilidadModule,
     CommonModule,
     SaludModule,
     ClavesModule,

@@ -575,7 +575,7 @@
       "post": {
         "operationId": "OAuth2Controller_token",
         "summary": "Token de acceso para un cliente (grant client_credentials)",
-        "description": "El cliente se autentica con Authorization: Basic (client_secret_basic) o con client_id y client_secret en el formulario (client_secret_post), no con los dos. Sin `scope` recibe los permitidos menos flights:admin y events:publish, que solo salen si están permitidos y se piden. No hay refresh_token: cuando el token vence (15 minutos) se pide otro. authorization_code no está implementado.",
+        "description": "El cliente se autentica con Authorization: Basic (client_secret_basic) o con client_id y client_secret en el formulario (client_secret_post), no con los dos. Sin `scope` recibe los permitidos menos flights:ops, flights:admin y events:publish, que solo salen si están permitidos y se piden. No hay refresh_token: cuando el token vence (15 minutos) se pide otro. authorization_code no está implementado.",
         "parameters": [
           {
             "name": "authorization",
@@ -604,7 +604,7 @@
                   },
                   "scope": {
                     "type": "string",
-                    "description": "Separados por espacio; posibles: flights:read flights:hold flights:book flights:cancel flights:webhooks flights:admin events:publish",
+                    "description": "Separados por espacio; posibles: flights:read flights:hold flights:book flights:cancel flights:webhooks flights:ops flights:admin events:publish",
                     "example": "flights:read flights:hold"
                   },
                   "client_id": {
@@ -717,7 +717,7 @@
   "info": {
     "title": "Quinde · Identity",
     "description": "Proveedor de identidad de Quinde: emite tokens de acceso JWT RS256 (RFC 9068) para personas y para clientes OAuth 2.0, y publica sus claves públicas en /.well-known/jwks.json.",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "contact": {}
   },
   "tags": [
@@ -796,6 +796,12 @@
                 }
               }
             }
+          },
+          "correlation_id": {
+            "type": "string",
+            "example": "corr-vuelos-7f3a9c",
+            "maxLength": 100,
+            "description": "El X-Correlation-Id de la petición (contrato v2, §6): el mismo que la respuesta lleva en su cabecera"
           }
         },
         "required": [

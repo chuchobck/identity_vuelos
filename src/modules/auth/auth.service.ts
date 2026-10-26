@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { fijarUsuario } from '../../common/contexto/contexto-peticion';
 import { traducirErrorBd } from '../../common/errores/traducir-error-bd';
 import { Reloj } from '../../common/reloj';
+import { Observabilidad, TipoTokenEmitido } from '../../observabilidad/observabilidad.service';
 import { AuditoriaSeguridad } from '../auditoria/auditoria.service';
 import { TokensService } from '../claves/tokens.service';
 import { aTokenRespuesta } from './auth.mapper';
@@ -40,6 +41,7 @@ export class AuthService {
     private readonly tokens: TokensService,
     private readonly auditoria: AuditoriaSeguridad,
     private readonly reloj: Reloj,
+    private readonly observabilidad: Observabilidad,
   ) {}
 
   /** Crea una cuenta con el rol de cliente. Un correo ya registrado responde 409. */
@@ -71,10 +73,15 @@ export class AuthService {
    * mismo: siempre se corre argon2, contra el hash ficticio si el correo no existe, y siempre
    * se escribe una fila de auditoría.
    */
-  async iniciarSesion(dto: LoginDto): Promise<TokenRespuestaDto> {
+  iniciarSesion(dto: LoginDto): Promise<TokenRespuestaDto> {
+    return this.observabilidad.span('auth.login', () => this.iniciarSesionConSpan(dto));
+  }
+
+  private async iniciarSesionConSpan(dto: LoginDto): Promise<TokenRespuestaDto> {
     const usuario = await this.repositorio.buscarPorCorreo(dto.email);
     if (!usuario) {
       await this.contrasenas.verificarSinUsuario(dto.password);
+      this.observabilidad.login('invalid_credentials');
       await this.auditoria.registrar({
         evento: 'LOGIN',
         resultado: 'FALLO',
@@ -85,6 +92,7 @@ export class AuthService {
     }
     const valida = await this.contrasenas.verificar(usuario.hashContrasena, dto.password);
     if (!valida || !usuario.activo) {
+      this.observabilidad.login(valida ? 'inactive_account' : 'invalid_credentials');
       await this.auditoria.registrar({
         evento: 'LOGIN',
         resultado: 'FALLO',
@@ -111,7 +119,8 @@ export class AuthService {
       ...this.vigenciaRefresco(),
     });
     await this.auditoria.registrar({ evento: 'LOGIN', resultado: 'EXITO', usuarioId: usuario.id });
-    return this.respuesta(usuario, refresco.token);
+    this.observabilidad.login('success');
+    return this.respuesta(usuario, refresco.token, 'user_login');
   }
 
   /**
@@ -119,7 +128,11 @@ export class AuthService {
    * misma familia. Si llega uno que ya fue reemplazado, alguien más lo tiene: se revoca la
    * familia completa y el dueño tiene que volver a iniciar sesión.
    */
-  async refrescar(token: string): Promise<TokenRespuestaDto> {
+  refrescar(token: string): Promise<TokenRespuestaDto> {
+    return this.observabilidad.span('auth.refresh', () => this.refrescarConSpan(token));
+  }
+
+  private async refrescarConSpan(token: string): Promise<TokenRespuestaDto> {
     const guardado = tieneFormatoDeTokenRefresco(token)
       ? await this.repositorio.buscarTokenRefresco(hashearTokenRefresco(token))
       : null;
@@ -167,7 +180,7 @@ export class AuthService {
       resultado: 'EXITO',
       usuarioId: guardado.usuario.id,
     });
-    return this.respuesta(guardado.usuario, nuevo.token);
+    return this.respuesta(guardado.usuario, nuevo.token, 'user_refresh');
   }
 
   /**
@@ -250,9 +263,11 @@ export class AuthService {
   private async respuesta(
     usuario: UsuarioConRoles,
     tokenRefresco: string,
+    tipo: TipoTokenEmitido,
   ): Promise<TokenRespuestaDto> {
     const scopes = scopesDeRoles(usuario.roles);
     const acceso = await this.tokens.emitir({ sub: usuario.id, scopes });
+    this.observabilidad.tokenEmitido(tipo);
     return aTokenRespuesta({
       tokenAcceso: acceso.token,
       expiraEnSegundos: acceso.expiraEnSegundos,

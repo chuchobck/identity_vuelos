@@ -41,6 +41,12 @@ no levanta y el error nombra la variable (nunca muestra su valor). Una variable 
 | `TRUST_PROXY` | No | `1` | Se usa la IP del socket: detrás de un balanceador, todos los clientes comparten el límite por IP y la auditoría guarda la IP del balanceador. `true` no se acepta |
 | `RATE_LIMIT_MAX` | No | `100` | 100 peticiones por IP y por ventana en todo el servicio |
 | `RATE_LIMIT_WINDOW_SECONDS` | No | `60` | 60 segundos |
+| `METRICS_PORT` | No | `9464` (contenedor), `9467` (los cinco servicios en una máquina) | `9464`. Puerto aparte de `GET /metrics` (Prometheus), que el ingress **nunca** expone; `0` lo apaga. Un puerto ocupado no tumba el servicio: avisa y sigue sin métricas |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | `http://jaeger:4318` | No se exportan trazas. Igual hay `X-Trace-Id` y `traceId` en los logs. Los spans salen a `{endpoint}/v1/traces` en lotes cada 2 s; un recolector caído o lento nunca retrasa una petición |
+| `OTEL_TRACES_SAMPLER_ARG` | No | `0.1` | 1 en desarrollo, 0.1 en producción: fracción de trazas raíz que se registran (0 a 1) |
+| `TRACE_TRUST_INCOMING` | No | `true` | `true`: continúa el `traceparent` del gateway (identity es interno). Solo `true` o `false` |
+| `OTEL_SERVICE_NAME` | No | `quinde-identity` | `quinde-identity` |
+| `OTEL_BSP_SCHEDULE_DELAY` | No | `2000` | 2000 ms entre lotes de spans. Existe para las pruebas |
 | `SEED_ADMIN_EMAIL` | No (solo `db/reset.sh`) | `admin@quinde.example` | `admin@quinde.example` |
 | `SEED_ADMIN_PASSWORD` | No (solo `db/reset.sh`) | 12 a 128 caracteres | No se crea el administrador inicial |
 | `DB_PORT` | No (solo `docker-compose.yml`) | `5433` | 5433 |
@@ -163,6 +169,21 @@ Qué cambia:
   filas existentes ya cumplen el nuevo, que solo amplía la lista. Sin este cambio,
   `cliente:crear --permitir-eventos` falla con `violates check constraint`.
 
+**0.2.0 → 0.3.0** (`002_flights_ops.sql`, `003_cliente_secreto_rotado.sql` y
+`004_auditoria_correlacion.sql`). Mismo orden: `./db/migrar.sh` y después la imagen. Correr la
+migración **antes** importa más que en la 0.2.0: la 0.3.0 escribe `id_correlacion` en cada fila de
+auditoría y, sin la columna, **todo** evento de seguridad falla al registrarse (login, refresh,
+token; la petición sigue, pero se pierde el rastro). Qué cambia:
+
+- `ck_cliente_oauth_scopes` admite `flights:ops` (hasta 8 scopes). Solo amplía la lista.
+- `evento_seguridad` suma `CLIENTE_SECRETO_ROTADO`.
+- `auditoria_seguridad` suma `id_correlacion text` (con su CHECK e índice parcial; nula en las
+  filas viejas).
+
+`migrar.sh` corre **todas** las migraciones en cada despliegue. Por eso las que reemplazan el CHECK
+de los scopes (001 y 002) lo hacen solo si el vigente no admite ya su scope: una base con un
+cliente que tiene `flights:ops` no puede volver a un CHECK más estrecho.
+
 Para comprobarlo:
 
 ```sql
@@ -184,6 +205,10 @@ npm run cliente:crear -- --nombre "Core eventos" --scopes "events:publish" --per
 docker exec -it <contenedor> node dist/cli/crear-cliente.js --nombre "..." --scopes "..."
 ```
 
+- `flights:ops` (operaciones de aeropuerto del contrato v2) exige `--permitir-ops`, y también solo
+  sale si se pide.
+- El partner Booking Prototipo no lleva ninguna bandera `--permitir-*`: su cliente, su token y la
+  rotación de su secreto están en [`PARTNER-BOOKING.md`](PARTNER-BOOKING.md).
 - `flights:admin` exige `--permitir-admin`, y aun así el cliente solo lo recibe si lo pide en
   el `scope` de cada token.
 - `events:publish` (publicar eventos; es el del core cuando publique) exige `--permitir-eventos`
@@ -192,6 +217,26 @@ docker exec -it <contenedor> node dist/cli/crear-cliente.js --nombre "..." --sco
   `UPDATE identidad.cliente_oauth SET activo = false WHERE codigo = '...';`
 - Cambiar un secreto: crear un cliente nuevo, pasarle el secreto al sistema que lo usa y dar de
   baja el viejo.
+
+## Observabilidad
+
+Identity sigue el estándar de los cinco servicios (`docs/OBSERVABILIDAD.md` del repo
+`gateway_vuelos`): `service.name` = `quinde-identity`.
+
+- **Trazas.** El SDK siempre arranca: cada respuesta lleva `X-Trace-Id` y cada línea de log, su
+  `traceId`. Los spans solo se exportan con `OTEL_EXPORTER_OTLP_ENDPOINT` (OTLP/HTTP, en lotes). Un
+  recolector caído o lento nunca retrasa una petición. Detrás del gateway, `TRACE_TRUST_INCOMING`
+  queda en `true` (por defecto) para continuar su traza; si identity fuera alcanzable sin pasar
+  por el gateway, ponerlo en `false`.
+- **Métricas.** `GET /metrics` en `METRICS_PORT` (9464 en un contenedor), **un puerto aparte que
+  el ingress nunca debe exponer**. En el puerto público no existe. Además de las comunes:
+  `identity_logins_total{result}` (`success`, `invalid_credentials`, `inactive_account`) e
+  `identity_tokens_issued_total{type}` (`user_login`, `user_refresh`, `client_credentials`).
+- **X-Correlation-Id.** Viaja en la cabecera de la petición y de la respuesta, en
+  `ProblemDetails.correlation_id`, en cada línea de log (`correlationId`) y en
+  `auditoria_seguridad.id_correlacion`. Para reconstruir un proceso:
+  `SELECT fecha_evento, evento, resultado FROM identidad.auditoria_seguridad WHERE id_correlacion = 'corr-123' ORDER BY id;`
+  (el rastro completo está en los logs y en la auditoría de cada servicio con ese mismo id).
 
 ## Verificación después de desplegar
 
@@ -219,7 +264,7 @@ curl -s $BASE/.well-known/openid-configuration | grep -o events:publish   # scop
 | Claims obligatorios | `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `scope` |
 | `sub` | Un uuid: `usuario.id` (persona) o `cliente_oauth.id` (cliente). Sigue siendo el `id_propietario` de retenciones, reservas y webhooks |
 | `client_id` | Solo en tokens de clientes (client_credentials). Sin él, el token es de una persona |
-| `scope` | Separado por espacios. Los 6 de vuelos (los de `SCOPES_POR_ROL` del core) y `events:publish`, que solo llevan los tokens de clientes |
+| `scope` | Separado por espacios. Los 7 de `PartnerOAuth2` del contrato v2 (`flights:read`, `hold`, `book`, `cancel`, `webhooks`, `ops` y `admin`) y `events:publish`, que solo llevan los tokens de clientes |
 
 ## Lo que cambia para el backoffice (administradores)
 

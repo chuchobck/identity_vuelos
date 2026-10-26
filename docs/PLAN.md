@@ -1,6 +1,6 @@
 # Plan — Quinde · Identity
 
-Actualizado: 2026-10-16 (cierre de la fase 4c) · Este archivo se actualiza al cerrar cada fase.
+Actualizado: 2026-10-26 (cierre de la fase I2) · Este archivo se actualiza al cerrar cada fase.
 
 El Reto 2 separa la identidad del core de vuelos. Hasta ahora el core
 ([backend_vuelos](https://github.com/chuchobck/backend_vuelos)) emitía sus propios JWT HS256 en
@@ -13,7 +13,8 @@ El Reto 2 separa la identidad del core de vuelos. Hasta ahora el core
 | --- | --- | --- |
 | 4a. Servicio de identidad | Fusionada en `main` (pull request #1, 2026-10-15) | Cada commit pasa `lint`, `format:check` y `build` (y `typecheck` desde que existe). `npm test`: 105 pruebas en 9 archivos contra PostgreSQL 16 local, también sobre una base recién cargada como en CI. `npm run test:mutaciones`: 25 de 25 mutaciones detectadas. Con `curl` contra el servicio compilado: register → login → me, refresh, reuso (401 y familia revocada), client_credentials (200 y 401 con `WWW-Authenticate`), JWKS con `Cache-Control: public, max-age=300` y los dos tokens decodificados. La imagen de Docker construye, corre como uid 1000, no puede escribir en `/app/dist`, queda `healthy` y `crear-cliente` funciona dentro |
 | 4b. El core verifica con el JWKS | Pendiente (otra fase, en backend_vuelos) | — |
-| 4c. `/admin/users` y `events:publish` | Hecha en la rama `feat/r2-admin-usuarios` (2026-10-16); falta la revisión y el merge | Cada commit pasa `lint`, `format:check`, `typecheck` y `build`. `npm test`: 154 pruebas en 11 archivos (49 nuevas, entre ellas las dos suites de `/admin/users` del core portadas) contra PostgreSQL 16 local y contra una base cargada como en CI (sin administrador de la semilla, donde corre la prueba del último administrador). `npm run test:mutaciones`: 40 de 40 detectadas (15 nuevas). La migración 001 corrida dos veces sobre una base de la 0.1.0 deja un `pg_dump` igual al de una base nueva. Con `curl` contra el servicio compilado: alta de un administrador (201, `no-store`), 409 y 400, lista paginada, el nuevo inicia sesión con rol `administrador`, `PATCH`/`PUT`/`GET /{id}` 405 y `/reactivate` 404 (como en el core), baja 204 e idempotente, login del dado de baja 401, 409 de la propia cuenta, 404 y 400, auditoría con `actor_id` y sin contraseña, hash ni correo, 403 `insufficient_scope` con un token de cliente, 401 sin token, preflight de CORS con `DELETE`, `cliente:crear` sin `--permitir-eventos` rechazado, el cliente con `events:publish` recibe el scope solo al pedirlo, otro sin permiso recibe `invalid_scope`, ningún login de persona lo trae y el descubrimiento lo publica |
+| 4c. `/admin/users` y `events:publish` | Fusionada en `main` (pull request #2, 2026-10-16) | Cada commit pasa `lint`, `format:check`, `typecheck` y `build`. `npm test`: 154 pruebas en 11 archivos (49 nuevas, entre ellas las dos suites de `/admin/users` del core portadas) contra PostgreSQL 16 local y contra una base cargada como en CI (sin administrador de la semilla, donde corre la prueba del último administrador). `npm run test:mutaciones`: 40 de 40 detectadas (15 nuevas). La migración 001 corrida dos veces sobre una base de la 0.1.0 deja un `pg_dump` igual al de una base nueva. Con `curl` contra el servicio compilado: alta de un administrador (201, `no-store`), 409 y 400, lista paginada, el nuevo inicia sesión con rol `administrador`, `PATCH`/`PUT`/`GET /{id}` 405 y `/reactivate` 404 (como en el core), baja 204 e idempotente, login del dado de baja 401, 409 de la propia cuenta, 404 y 400, auditoría con `actor_id` y sin contraseña, hash ni correo, 403 `insufficient_scope` con un token de cliente, 401 sin token, preflight de CORS con `DELETE`, `cliente:crear` sin `--permitir-eventos` rechazado, el cliente con `events:publish` recibe el scope solo al pedirlo, otro sin permiso recibe `invalid_scope`, ningún login de persona lo trae y el descubrimiento lo publica |
+| I2. Contrato v2: partner Booking, `flights:ops`, correlación y observabilidad | Hecha en la rama `feat/v2-partner` (2026-10-26); falta la revisión y el merge | Cada commit pasa `lint`, `format:check`, `typecheck` y `build`. `npm test`: 195 pruebas en 14 archivos (41 nuevas) contra PostgreSQL 16 local y contra una base cargada como en CI. `npm run test:mutaciones`: 56 de 56 detectadas (16 nuevas: `flights:ops` a un rol cliente o sin pedirlo, token de partner sin `client_id`, correlación perdida en la respuesta, el log, la auditoría o el error, ruta cruda y atributo sensible en las trazas, etiqueta por correo en las métricas). Las migraciones 002 a 004 corridas dos veces sobre una base de la 4a dejan un `pg_dump` igual al de una base nueva, y una tercera pasada con un cliente de los ocho scopes no falla. Con `curl` contra el servicio compilado: el comando de producción del cliente `booking-prototipo`, su token (`client_id`, 15 minutos, solo sus cinco scopes), `invalid_scope` al pedir `events:publish`, `flights:admin` o `flights:ops`, la rotación del secreto (el anterior da `invalid_client`), `flights:ops` en el administrador y no en el cliente, `X-Correlation-Id` en respuesta, error, log y auditoría, `X-Trace-Id` que continúa un `traceparent`, los spans que llegan a un recolector, `/metrics` en el 9467 (404 en el puerto público) y ninguna etiqueta con ids ni correos |
 | Despliegue en Azure | Pendiente (fase posterior) | — |
 
 ## Qué se copió del core y qué cambió
@@ -75,6 +76,23 @@ Tomadas sin consultar, con la lectura más razonable del pedido.
 | `no-store` | También en `/identity/v1/admin/` | La lista lleva correos de cuentas con permisos de administración |
 | Versión | 0.2.0 | Agregados compatibles (rutas y un scope) |
 
+### Fase I2
+
+| Tema | Decisión | Por qué |
+| --- | --- | --- |
+| `flights:ops` | Entre `webhooks` y `admin` en `SCOPES` (como `PartnerOAuth2`); el rol `administrador` lo lleva en su lista explícita, el rol `cliente` no; a un cliente OAuth solo si tiene `--permitir-ops` y lo pide | Lo pedido. Como `flights:admin`: un scope de operaciones nunca sale por defecto, aunque el cliente lo tenga permitido |
+| El partner no necesita un perfil nuevo en el código | Booking es un cliente OAuth normal; su definición está en `docs/PARTNER-BOOKING.md` (el comando exacto) | `cliente:crear` ya hacía lo necesario: ninguna bandera `--permitir-*` impide `flights:ops`, `flights:admin` y `events:publish`. El token trae `client_id` desde la 4a, y así el core lo reconoce como partner |
+| Rotación del secreto | `npm run cliente:rotar-secreto`, sin período de gracia; evento `CLIENTE_SECRETO_ROTADO` (migración 003) | Hacía falta cambiar el secreto sin cambiar el `client_id` (el de Booking es fijo). Sin gracia, porque dos hashes por cliente complican el modelo; se documenta la ventana y cómo rotar sin cortar (tener listo el secreto nuevo) |
+| Migraciones monótonas | 001 y 002 reemplazan `ck_cliente_oauth_scopes` solo si el vigente no admite su scope | `migrar.sh` corre todas en cada despliegue: la 001 volvía a poner el CHECK de 7 scopes y fallaba con un cliente con `flights:ops`. Lo encontró la base local; CI lo prueba con un cliente de los ocho scopes |
+| `X-Correlation-Id` | Formato: hasta 100 caracteres, `[A-Za-z0-9][A-Za-z0-9._:-]*`; inválido o repetido, uno nuevo `corr-<uuid>`; nunca rechaza la petición | El contrato solo fija el largo; el resto evita falsear un log JSON o una fila de auditoría (como el `X-Request-Id`). La cabecera vuelve en toda respuesta, también los errores de CORS y del parser |
+| `ProblemDetails.correlation_id` | Se agrega en el filtro a todo error de `/identity/v1` | Lo pide el §6 del contrato v2. Los errores de `/oauth2/token` siguen en el formato de RFC 6749 (solo la cabecera) |
+| Auditoría | Columna `id_correlacion` (migración 004), nula en las filas viejas | Reconstruir un proceso con una consulta por `id_correlacion`, como pide el §6 |
+| El estándar del gateway | Copia tal cual de `traceparent.ts`, `atributos.ts`, `trazas.ts` y `metricas.ts`; `express.ts` reemplaza a `fastify.ts`; `TRACE_TRUST_INCOMING=true` por defecto (servicio interno) | Es lo que dice el estándar para un servicio NestJS interno |
+| Contexto del span y el parser | Un segundo middleware reabre el contexto de OpenTelemetry después del parser del cuerpo, y `finish` y el filtro de errores lo reentran | El parser emite sus eventos fuera del contexto asíncrono (igual que pasa con el de la app): sin esto, los handlers corren sin span y el log de acceso sin `traceId` |
+| Métricas propias | `identity_logins_total{result}` (`success`, `invalid_credentials`, `inactive_account`) e `identity_tokens_issued_total{type}` (`user_login`, `user_refresh`, `client_credentials`) | Lo pedido, con listas cerradas. Correo desconocido y contraseña errónea cuentan igual (`invalid_credentials`): la métrica no distingue lo que la respuesta tampoco distingue |
+| `METRICS_PORT` | 9464 por defecto (contenedor); 9467 en `.env.example` (los cinco servicios en una máquina); un puerto ocupado avisa y no tumba el servicio | El estándar. Un servicio de identidad no debe caerse por su monitoreo |
+| Versión | 0.3.0 | Agregados compatibles |
+
 ## Hallazgos
 
 | Tema | Qué pasó | Qué implica |
@@ -87,6 +105,9 @@ Tomadas sin consultar, con la lectura más razonable del pedido.
 | Emisor local en producción | Se comparaba `host` (con puerto) en vez de `hostname` | Corregido; lo encontró la prueba del entorno |
 | Rutas inexistentes y el límite | Un 404 no pasa por los guards, así que no cuenta en el límite global (como en el core) | La prueba de la salud usa una ruta real para agotar el límite |
 | Docker en esta máquina | El `docker build` no tiene salida a npm sin el proxy y la CA de este entorno | Se verificó con una variante local del Dockerfile que agrega el proxy y la CA (no está en el repo); el Dockerfile del repo se construye en CI |
+| El exportador OTLP bajo Jest | `@opentelemetry/otlp-exporter-base` carga su transporte con `import('http')`, que la VM de Jest rechaza sin `--experimental-vm-modules`: los spans nunca salían y la prueba no veía nada | `transformar-jose.js` lo pasa a CommonJS, igual que el gateway. La causa se vio con `diag` de OpenTelemetry (el exportador falla en silencio) |
+| `ConfigService` y el entorno de las pruebas | Da prioridad al entorno validado al importar `AppModule`: la prueba de métricas no podía cambiar `METRICS_PORT` | `crear-app` se carga con `import()` dinámico, después de fijar el puerto y el recolector |
+| `GET /admin/users/{id}` | Responde 405 (la ruta existe con `DELETE`), y su métrica va a `__unmatched__` | La plantilla solo la tiene una ruta que atendió la petición; un 405 no la tiene, como en el estándar |
 | La 0.2.0 sobre una base sin migrar | Arranca, pero cada fila de auditoría falla con P2022 (falta `actor_id`): el login sigue y el evento se pierde; un alta o una baja de `/admin/users` responde 500 | `docs/DEPLOY.md` pide correr `db/migrar.sh` antes de desplegar. Se comprobó levantando la 0.2.0 sobre una base con el esquema de la 0.1.0 |
 | `PATCH`/`PUT`/`GET /admin/users/{id}` | Responden 405 (la ruta existe con `DELETE`), como en el core, que tiene el mismo `traducir-excepcion.ts` | La respuesta es idéntica a la del core |
 | La prueba del último administrador | Se omite (con aviso) si hay un administrador fuera de las pruebas, como en el core. En una base local con `SEED_ADMIN_PASSWORD` no corre | Corre en CI (la semilla va sin administrador). La mutación `ultimo-admin` se comprueba con `DATABASE_URL` de una base así |
@@ -94,8 +115,17 @@ Tomadas sin consultar, con la lectura más razonable del pedido.
 
 ## Pendientes
 
-- [ ] Dueño del repo: revisar y fusionar el pull request de `feat/r2-admin-usuarios`.
-- [ ] Al desplegar la 0.2.0: correr `./db/migrar.sh` contra la base antes de la imagen nueva.
+- [ ] Dueño del repo: revisar y fusionar el pull request de `feat/v2-partner`.
+- [ ] Al desplegar la 0.3.0: correr `./db/migrar.sh` contra la base antes de la imagen nueva (002 a
+      004; sin la 004 la auditoría no puede escribir).
+- [ ] Producción: crear el cliente de Booking (comando en `docs/PARTNER-BOOKING.md`) y entregarle
+      el secreto por el gestor de secretos, no por chat.
+- [ ] Gateway: confirmar que publique `/api/v2/oauth2/token` (hoy expone `/oauth2/token`); si no,
+      Booking pide el token directo a identity.
+- [ ] Core (fase del contrato v2): exigir `flights:ops` en las operaciones de aeropuerto y
+      reconocer al partner por el `client_id` del token.
+- [ ] Exponer `METRICS_PORT` solo a la red interna (el ingress nunca) y apuntar Prometheus a
+      `quinde-identity`.
 - [ ] Fase 4b (core): verificar con el JWKS de este servicio (ver `docs/DEPLOY.md`, "Lo que
       necesita el core"), quitar `src/modules/auth` del core (y `JWT_SECRET`) y decidir qué pasa
       con las cuentas que hoy viven en `vuelos.usuario` (migrarlas a `identidad.usuario` con su

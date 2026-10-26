@@ -6,6 +6,9 @@ import { middlewareContexto, middlewareRequestId } from './common/contexto/conte
 import { LoggerJson, nivelesPorEntorno } from './common/logger/logger-json';
 import { crearPipeValidacion } from './common/pipes/validacion.pipe';
 import { parsearTrustProxy } from './config/proxy';
+import { middlewareContextoTraza, middlewareObservacion } from './observabilidad/express';
+import { Metricas } from './observabilidad/metricas';
+import { Trazas } from './observabilidad/trazas';
 import { configurarSeguridad } from './config/seguridad';
 import { configurarSwagger, RUTA_SWAGGER } from './config/swagger';
 import {
@@ -25,9 +28,11 @@ export interface OpcionesConfigurarApp {
  * las pruebas e2e, para que probar el servicio sea probar el que de verdad se despliega.
  *
  * El orden de los middlewares importa:
- *   1. request id: antes que todo, para que hasta un 413 del parser lleve X-Request-Id
+ *   1. request id: antes que todo, para que hasta un 413 del parser lleve X-Request-Id, y justo
+ *      después la observabilidad (span SERVER, X-Trace-Id, métricas): el primero que sigue
  *   2. helmet, CORS, parser del cuerpo y tipo de contenido (configurarSeguridad)
- *   3. contexto asíncrono: después del parser, que perdería el contexto si se abriera antes
+ *   3. contexto asíncrono (el de la app y el del span): después del parser, que perdería el
+ *      contexto si se abriera antes
  */
 export function configurarApp(app: NestExpressApplication, opciones: OpcionesConfigurarApp = {}) {
   const config = app.get(ConfigService);
@@ -40,9 +45,13 @@ export function configurarApp(app: NestExpressApplication, opciones: OpcionesCon
     opciones.logger ?? new LoggerJson(undefined, nivelesPorEntorno(config.get('NODE_ENV')));
   app.useLogger(logger);
 
+  const trazas = app.get(Trazas);
   app.use(middlewareRequestId);
+  app.use(middlewareObservacion(trazas, app.get(Metricas)));
   configurarSeguridad(app, RUTAS_SIN_CACHE);
   app.use(middlewareContexto);
+  // Igual que el contexto de la app: el del span se reabre después del parser del cuerpo
+  app.use(middlewareContextoTraza(trazas));
 
   // /identity/v1/...: prefijo global más versión en la URL; las rutas de los estándares
   // (/.well-known, /oauth2/token) quedan en la raíz

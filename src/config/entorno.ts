@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -204,6 +205,46 @@ export class VariablesEntorno {
   @IsInt({ message: 'RATE_LIMIT_WINDOW_SECONDS debe ser un número entero' })
   @IsOptional()
   RATE_LIMIT_WINDOW_SECONDS?: number;
+
+  /** `service.name` de las trazas y las métricas. Sin valor: quinde-identity. */
+  @Matches(/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/, {
+    message: 'OTEL_SERVICE_NAME debe ser un nombre corto (letras, dígitos, punto, guion)',
+  })
+  @IsOptional()
+  OTEL_SERVICE_NAME?: string;
+
+  /** Base OTLP/HTTP del recolector de trazas (`http://jaeger:4318`). Sin valor: no se exporta. */
+  @Matches(/^https?:\/\/[^\s?#]+$/, {
+    message: 'OTEL_EXPORTER_OTLP_ENDPOINT debe ser una URL http(s) sin query',
+  })
+  @IsOptional()
+  OTEL_EXPORTER_OTLP_ENDPOINT?: string;
+
+  /** Fracción de trazas raíz que se registran (0 a 1). Sin valor: 1 en desarrollo, 0.1 en producción. */
+  @Max(1, { message: 'OTEL_TRACES_SAMPLER_ARG debe estar entre 0 y 1' })
+  @Min(0, { message: 'OTEL_TRACES_SAMPLER_ARG debe estar entre 0 y 1' })
+  @IsNumber({}, { message: 'OTEL_TRACES_SAMPLER_ARG debe ser un número entre 0 y 1' })
+  @IsOptional()
+  OTEL_TRACES_SAMPLER_ARG?: number;
+
+  /** Continuar el `traceparent` entrante (identity es interno: el que llama es el gateway). Sin valor: true. */
+  @IsIn(['true', 'false'], { message: 'TRACE_TRUST_INCOMING debe ser true o false' })
+  @IsOptional()
+  TRACE_TRUST_INCOMING?: string;
+
+  /** Cada cuánto sale un lote de spans al recolector, en ms (variable estándar de OpenTelemetry). Sin valor: 2000. */
+  @Max(60_000, { message: 'OTEL_BSP_SCHEDULE_DELAY debe estar entre 1 y 60000' })
+  @Min(1, { message: 'OTEL_BSP_SCHEDULE_DELAY debe estar entre 1 y 60000' })
+  @IsInt({ message: 'OTEL_BSP_SCHEDULE_DELAY debe ser un número entero' })
+  @IsOptional()
+  OTEL_BSP_SCHEDULE_DELAY?: number;
+
+  /** Puerto aparte de `/metrics` (el ingress nunca lo expone); 0 lo apaga. Sin valor: 9464. */
+  @Max(65535, { message: 'METRICS_PORT debe estar entre 0 y 65535' })
+  @Min(0, { message: 'METRICS_PORT debe estar entre 0 y 65535' })
+  @IsInt({ message: 'METRICS_PORT debe ser un número entero' })
+  @IsOptional()
+  METRICS_PORT?: number;
 }
 
 /** Se pasa a ConfigModule.forRoot({ validate }); corre una sola vez, al arrancar. */

@@ -48,8 +48,11 @@ publica sus claves públicas en `/.well-known/jwks.json`. El core
 - Un cambio en cómo se firma o se verifica se prueba contra el verificador independiente
   (`test/utils/verificador.ts`, jose + JWKS por HTTP), no solo contra `TokensService`.
 - Los scopes de cada rol están en `src/modules/auth/scopes.ts` (la tabla del core); los de cada
-  cliente, en `cliente_oauth.scopes_permitidos`. Un cliente solo recibe `flights:admin` o
-  `events:publish` si lo tiene permitido y lo pide; ningún rol de persona tiene `events:publish`.
+  cliente, en `cliente_oauth.scopes_permitidos`. Un cliente solo recibe `flights:ops`,
+  `flights:admin` o `events:publish` si lo tiene permitido y lo pide; ningún rol de persona tiene
+  `events:publish` y el rol `cliente` no tiene `flights:ops`.
+- El partner Booking Prototipo es un cliente OAuth (`docs/PARTNER-BOOKING.md`): su token lleva
+  `client_id` y solo sus cinco scopes; el core lo reconoce como partner por ese `client_id`.
 
 ## Seguridad
 
@@ -60,7 +63,11 @@ publica sus claves públicas en `/.well-known/jwks.json`. El core
   parcial. El escaneo de `test/auditoria.e2e-spec.ts` lo comprueba.
 - Correo inexistente, contraseña errónea y cuenta inactiva (y cliente desconocido, secreto errado
   y cliente inactivo) responden igual y tardan lo mismo: siempre se corre argon2.
-- Cada evento de seguridad pasa por `AuditoriaSeguridad`, con un motivo de la lista cerrada.
+- Cada evento de seguridad pasa por `AuditoriaSeguridad`, con un motivo de la lista cerrada, el
+  `X-Request-Id` y el `X-Correlation-Id` de la petición.
+- `X-Correlation-Id` (contrato v2, §6): se lee si es válido (hasta 100 caracteres, sin espacios
+  ni comillas), si no se genera; se devuelve en toda respuesta, en `ProblemDetails.correlation_id`,
+  en cada línea de log y en la auditoría. Se propaga sin cambios.
 - `/identity/v1` responde los errores como ProblemDetails (los mismos `code` y `type` que el
   core); `/oauth2/token`, con el formato de RFC 6749. Toda respuesta de `/auth` y de
   `/oauth2/token`, también un error, lleva `Cache-Control: no-store`.
@@ -80,6 +87,21 @@ publica sus claves públicas en `/.well-known/jwks.json`. El core
 - Las pruebas no borran: crean cuentas `@e2e.quinde.example` y clientes `e2e-...` y al final los
   dan de baja.
 - Ningún `.json` con el mismo nombre base que un `.ts`: Jest importaría el JSON.
+
+## Observabilidad
+
+- El estándar es `docs/OBSERVABILIDAD.md` del repo `gateway_vuelos`; un cambio de nombres,
+  etiquetas o atributos se hace allá primero. `traceparent.ts`, `atributos.ts`, `trazas.ts` y
+  `metricas.ts` de `src/observabilidad/` son copia tal cual del gateway: no se editan aquí.
+- Servicio interno: continúa el `traceparent` del gateway (`TRACE_TRUST_INCOMING=true`). Spans
+  manuales con los atributos de `ATRIBUTOS_PERMITIDOS`; `route` es siempre la plantilla o
+  `__unmatched__`. Un 4xx no marca error un span.
+- Nunca a un span, una métrica o un log: tokens, `Authorization`, contraseñas, correos, la query
+  ni cuerpos. Tampoco a un span o una métrica: ids de usuario o de cliente, `client_id` ni IPs
+  (al log, solo el uuid de `sub` y la IP de la línea de acceso, como desde la 4a). Las etiquetas
+  de las métricas propias (`identity_*`) son listas cerradas.
+- Las métricas van en `METRICS_PORT`, nunca en el puerto público. En las pruebas es 0; la prueba
+  de métricas abre el suyo y carga `crearApp` después de fijarlo.
 
 ## Pruebas
 

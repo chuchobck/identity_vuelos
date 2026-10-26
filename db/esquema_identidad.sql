@@ -41,9 +41,10 @@ CREATE TYPE evento_seguridad AS ENUM (
     'TOKEN_CLIENTE',
     'CLIENTE_CREADO',
     'ADMINISTRADOR_CREADO',
-    'ADMINISTRADOR_DADO_DE_BAJA'
+    'ADMINISTRADOR_DADO_DE_BAJA',
+    'CLIENTE_SECRETO_ROTADO'
 );
-COMMENT ON TYPE evento_seguridad IS 'Evento de auditoria_seguridad. REUSO_REFRESCO=llegó un refresh ya rotado y se revocó la familia; ACCESO_CUENTA_INACTIVA=un token válido de una cuenta desactivada; TOKEN_CLIENTE=POST /oauth2/token (client_credentials); ADMINISTRADOR_CREADO y ADMINISTRADOR_DADO_DE_BAJA=POST y DELETE de /admin/users (actor_id es quien lo hizo).';
+COMMENT ON TYPE evento_seguridad IS 'Evento de auditoria_seguridad. REUSO_REFRESCO=llegó un refresh ya rotado y se revocó la familia; ACCESO_CUENTA_INACTIVA=un token válido de una cuenta desactivada; TOKEN_CLIENTE=POST /oauth2/token (client_credentials); ADMINISTRADOR_CREADO y ADMINISTRADOR_DADO_DE_BAJA=POST y DELETE de /admin/users (actor_id es quien lo hizo); CLIENTE_SECRETO_ROTADO=npm run cliente:rotar-secreto.';
 
 CREATE TYPE resultado_seguridad AS ENUM ('EXITO', 'FALLO');
 
@@ -158,14 +159,15 @@ CREATE TABLE cliente_oauth (
     CONSTRAINT ck_cliente_oauth_codigo CHECK (codigo ~ '^[a-z0-9][a-z0-9._-]{2,63}$'),
     CONSTRAINT ck_cliente_oauth_nombre CHECK (btrim(nombre) <> '' AND char_length(nombre) <= 100),
     CONSTRAINT ck_cliente_oauth_hash_secreto CHECK (hash_secreto ~ '^\$argon2id\$v=19\$[a-z]=[0-9]+(,[a-z]=[0-9]+)*\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$'),
-    -- Solo los scopes que existen (los 5 del contrato, flights:admin y events:publish), sin
-    -- repetidos ni nulos. Que un cliente reciba flights:admin o events:publish además exige
-    -- pedirlo en cada token (ver el servicio). La misma lista que SCOPES en
-    -- src/modules/auth/scopes.ts; db/migraciones/001 la lleva a una base ya creada.
+    -- Solo los scopes que existen (los 5 del contrato, flights:ops, flights:admin y
+    -- events:publish), sin repetidos ni nulos. Que un cliente reciba flights:ops, flights:admin
+    -- o events:publish además exige pedirlo en cada token (ver el servicio). La misma lista que
+    -- SCOPES en src/modules/auth/scopes.ts; db/migraciones/001 y 002 la llevan a una base ya
+    -- creada.
     CONSTRAINT ck_cliente_oauth_scopes CHECK (
-            cardinality(scopes_permitidos) BETWEEN 1 AND 7
+            cardinality(scopes_permitidos) BETWEEN 1 AND 8
         AND array_position(scopes_permitidos, NULL) IS NULL
-        AND scopes_permitidos <@ ARRAY['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks', 'flights:admin', 'events:publish']::text[]
+        AND scopes_permitidos <@ ARRAY['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks', 'flights:ops', 'flights:admin', 'events:publish']::text[]
         AND fn_sin_repetidos(scopes_permitidos)
     ),
     CONSTRAINT ck_cliente_oauth_fechas CHECK (fecha_actualizacion >= fecha_creacion)
@@ -207,6 +209,8 @@ CREATE TABLE auditoria_seguridad (
     -- Al final (y no junto a usuario_id) porque la migración 001 la agrega con ADD COLUMN: así una
     -- base migrada y una nueva quedan iguales.
     actor_id        uuid,
+    -- Al final, por la misma razón que actor_id: la migración 004 la agrega con ADD COLUMN.
+    id_correlacion  text,
     CONSTRAINT pk_auditoria_seguridad PRIMARY KEY (id),
     CONSTRAINT fk_auditoria_seguridad_usuario FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,
     CONSTRAINT fk_auditoria_seguridad_cliente FOREIGN KEY (cliente_id) REFERENCES cliente_oauth (id) ON DELETE RESTRICT,
@@ -217,7 +221,9 @@ CREATE TABLE auditoria_seguridad (
     -- Nunca el correo completo: a lo sumo dos caracteres, "***" y el dominio.
     CONSTRAINT ck_auditoria_seguridad_correo CHECK (correo_parcial ~ '^[^@[:space:]]{0,2}\*\*\*@[^@[:space:]]+$'),
     -- El mismo formato que acepta el servicio para X-Request-Id.
-    CONSTRAINT ck_auditoria_seguridad_id_peticion CHECK (id_peticion ~ '^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$')
+    CONSTRAINT ck_auditoria_seguridad_id_peticion CHECK (id_peticion ~ '^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$'),
+    -- El X-Correlation-Id del contrato v2 (§6): hasta 100 caracteres, con el formato que acepta el servicio.
+    CONSTRAINT ck_auditoria_seguridad_id_correlacion CHECK (id_correlacion ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$')
 );
 
 -- El log solo crece: nadie edita ni borra filas de auditoría.
@@ -253,6 +259,7 @@ CREATE INDEX ix_auditoria_seguridad_fecha ON auditoria_seguridad (fecha_evento);
 CREATE INDEX ix_auditoria_seguridad_usuario ON auditoria_seguridad (usuario_id, fecha_evento) WHERE usuario_id IS NOT NULL;
 CREATE INDEX ix_auditoria_seguridad_cliente ON auditoria_seguridad (cliente_id, fecha_evento) WHERE cliente_id IS NOT NULL;
 CREATE INDEX ix_auditoria_seguridad_actor ON auditoria_seguridad (actor_id, fecha_evento) WHERE actor_id IS NOT NULL;
+CREATE INDEX ix_auditoria_seguridad_correlacion ON auditoria_seguridad (id_correlacion) WHERE id_correlacion IS NOT NULL;
 
 
 -- =============================================================================
@@ -281,6 +288,7 @@ COMMENT ON COLUMN cliente_oauth.scopes_permitidos IS 'Lo máximo que el cliente 
 COMMENT ON COLUMN auditoria_seguridad.motivo IS 'Código corto del resultado (CONTRASENA_INVALIDA, CLIENTE_INACTIVO, REUTILIZACION...). Nunca texto libre.';
 COMMENT ON COLUMN auditoria_seguridad.correo_parcial IS 'Solo en un fallo con un correo que no tiene cuenta: dos caracteres, "***" y el dominio.';
 COMMENT ON COLUMN auditoria_seguridad.id_peticion IS 'X-Request-Id de la petición, para cruzar con los logs.';
+COMMENT ON COLUMN auditoria_seguridad.id_correlacion IS 'X-Correlation-Id de la petición (contrato v2, §6): une este evento con los del mismo proceso de negocio en los demás servicios.';
 COMMENT ON COLUMN auditoria_seguridad.actor_id IS 'Quién hizo el cambio cuando no es la propia cuenta: el administrador (su sub) en un alta o una baja de /admin/users. usuario_id es la cuenta afectada.';
 
 COMMIT;

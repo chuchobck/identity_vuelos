@@ -44,16 +44,29 @@ CREATE INDEX IF NOT EXISTS ix_auditoria_seguridad_actor
 
 COMMENT ON COLUMN auditoria_seguridad.actor_id IS 'Quién hizo el cambio cuando no es la propia cuenta: el administrador (su sub) en un alta o una baja de /admin/users. usuario_id es la cuenta afectada.';
 
--- 3. events:publish entre los scopes que un cliente puede tener permitidos. Se
---    reemplaza el CHECK entero (DROP IF EXISTS + ADD): el resultado es el mismo
---    corra una o diez veces. Las filas existentes ya cumplen el CHECK nuevo,
---    que solo amplía la lista.
-ALTER TABLE cliente_oauth DROP CONSTRAINT IF EXISTS ck_cliente_oauth_scopes;
-ALTER TABLE cliente_oauth ADD CONSTRAINT ck_cliente_oauth_scopes CHECK (
-        cardinality(scopes_permitidos) BETWEEN 1 AND 7
-    AND array_position(scopes_permitidos, NULL) IS NULL
-    AND scopes_permitidos <@ ARRAY['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks', 'flights:admin', 'events:publish']::text[]
-    AND fn_sin_repetidos(scopes_permitidos)
-);
+-- 3. events:publish entre los scopes que un cliente puede tener permitidos. Se reemplaza el
+--    CHECK entero, pero solo si el vigente todavía no lo admite: db/migrar.sh corre TODAS las
+--    migraciones en cada despliegue, y una migración posterior (002) ya lo amplió. Sin esta
+--    condición, volver a correr la 001 pondría de nuevo el CHECK viejo y fallaría con cualquier
+--    cliente que tenga un scope más nuevo. Las filas existentes ya cumplen el CHECK nuevo, que
+--    solo amplía la lista.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'ck_cliente_oauth_scopes'
+           AND conrelid = 'identidad.cliente_oauth'::regclass
+           AND pg_get_constraintdef(oid) LIKE '%events:publish%'
+    ) THEN
+        ALTER TABLE cliente_oauth DROP CONSTRAINT IF EXISTS ck_cliente_oauth_scopes;
+        ALTER TABLE cliente_oauth ADD CONSTRAINT ck_cliente_oauth_scopes CHECK (
+                cardinality(scopes_permitidos) BETWEEN 1 AND 7
+            AND array_position(scopes_permitidos, NULL) IS NULL
+            AND scopes_permitidos <@ ARRAY['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks', 'flights:admin', 'events:publish']::text[]
+            AND fn_sin_repetidos(scopes_permitidos)
+        );
+    END IF;
+END;
+$$;
 
 COMMIT;
