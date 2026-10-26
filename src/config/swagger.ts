@@ -3,7 +3,7 @@ import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 
 export const RUTA_SWAGGER = 'api/docs';
 /** Versión del servicio (la de package.json). */
-export const VERSION_SERVICIO = '0.2.0';
+export const VERSION_SERVICIO = '0.3.0';
 const TITULO = 'Quinde · Identity';
 
 /** Nombre del esquema bearer de Swagger (el del botón Authorize). */

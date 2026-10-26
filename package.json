@@ -1,6 +1,6 @@
 {
   "name": "quinde-identity",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Quinde · Identity: proveedor de identidad (OAuth 2.0 y JWT RS256) del sistema de vuelos",
   "author": "",
   "private": true,

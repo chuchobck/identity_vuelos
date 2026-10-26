@@ -717,7 +717,7 @@
   "info": {
     "title": "Quinde · Identity",
     "description": "Proveedor de identidad de Quinde: emite tokens de acceso JWT RS256 (RFC 9068) para personas y para clientes OAuth 2.0, y publica sus claves públicas en /.well-known/jwks.json.",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "contact": {}
   },
   "tags": [

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { AddressInfo } from 'node:net';
 import * as request from 'supertest';
+import { VERSION_SERVICIO } from '../src/config/swagger';
 import { ATRIBUTOS_PERMITIDOS, TIPOS_DE_ERROR } from '../src/observabilidad/atributos';
 import { CUBETAS_DURACION } from '../src/observabilidad/metricas';
 import {
@@ -96,7 +97,7 @@ describe('Observabilidad (trazas, métricas y logs)', () => {
         nombre: 'GET /identity/v1/health',
       });
       expect(span.recurso['deployment.environment']).toBe('test');
-      expect(span.recurso['service.version']).toBe('0.2.0');
+      expect(span.recurso['service.version']).toBe(VERSION_SERVICIO);
     });
 
     it.each([
@@ -236,8 +237,8 @@ describe('Observabilidad (trazas, métricas y logs)', () => {
         series(texto, 'http_server_request_duration_seconds_count').get(salud),
       ).toBeGreaterThanOrEqual(1);
       expect(texto).toContain('# TYPE http_client_request_duration_seconds histogram');
-      expect(texto).toMatch(
-        /quinde_build_info\{service="quinde-identity",version="0\.2\.0",environment="test"\} 1/,
+      expect(texto).toContain(
+        `quinde_build_info{service="quinde-identity",version="${VERSION_SERVICIO}",environment="test"} 1`,
       );
       expect(texto).toContain('process_cpu_user_seconds_total');
       expect(texto).toContain('nodejs_eventloop_lag_seconds');
