@@ -1,4 +1,5 @@
 import { LoggerService, LogLevel } from '@nestjs/common';
+import { camposDeTraza } from '../../observabilidad/trazas';
 import { obtenerContexto } from '../contexto/contexto-peticion';
 
 /** Adónde va cada línea. Por defecto, la salida estándar; las pruebas pasan un arreglo. */
@@ -85,6 +86,9 @@ export class LoggerJson implements LoggerService {
       context: contexto,
       requestId: obtenerContexto()?.requestId,
       correlationId: obtenerContexto()?.correlationId,
+      // De la traza activa: toda línea escrita durante una petición los lleva (docs/OBSERVABILIDAD.md, §3)
+      traceId: camposDeTraza().traceId,
+      spanId: camposDeTraza().spanId,
       message: comoTexto(mensaje),
       stack,
     };

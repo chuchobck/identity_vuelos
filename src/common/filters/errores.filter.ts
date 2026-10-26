@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, Logger } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { Request, Response } from 'express';
+import { enObservacion } from '../../observabilidad/observacion';
 import { ErrorOAuth, errorOAuthPorStatus } from '../../modules/oauth2/errores-oauth';
 import { RUTA_TOKEN } from '../../modules/oauth2/ruta-token';
 import { ejecutarEnContexto, obtenerContexto } from '../contexto/contexto-peticion';
@@ -39,9 +40,11 @@ export class ErroresFilter implements ExceptionFilter {
     // de la petición para que su línea de log lo lleve igual.
     const contexto = contextoDeLaPeticion(peticion);
     const registrar = (escribir: () => void) =>
-      contexto && obtenerContexto() === undefined
-        ? ejecutarEnContexto(contexto, escribir)
-        : escribir();
+      enObservacion(peticion, () =>
+        contexto && obtenerContexto() === undefined
+          ? ejecutarEnContexto(contexto, escribir)
+          : escribir(),
+      );
 
     if (excepcion instanceof ErrorOAuth) {
       registrar(() =>

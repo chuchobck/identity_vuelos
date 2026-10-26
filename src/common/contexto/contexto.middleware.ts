@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { ContextoPeticion, ejecutarEnContexto, normalizarIp } from './contexto-peticion';
+import { enObservacion } from '../../observabilidad/observacion';
 import { CABECERA_CORRELATION_ID, resolverCorrelationId } from './correlation-id';
 import { CABECERA_REQUEST_ID, resolverRequestId } from './request-id';
 
@@ -43,9 +44,11 @@ export function middlewareRequestId(peticion: Request, respuesta: Response, next
     // 'finish' se emite desde el socket, fuera del contexto asíncrono de la petición:
     // se vuelve a entrar para que el logger vea el id.
     ejecutarEnContexto(contexto, () =>
-      logger.log(
-        `${peticion.method} ${peticion.originalUrl.split('?')[0]} ${respuesta.statusCode} ` +
-          `${ms.toFixed(1)}ms ip=${contexto.ip ?? '-'}${contexto.usuario ? ` sub=${contexto.usuario}` : ''}`,
+      enObservacion(peticion, () =>
+        logger.log(
+          `${peticion.method} ${peticion.originalUrl.split('?')[0]} ${respuesta.statusCode} ` +
+            `${ms.toFixed(1)}ms ip=${contexto.ip ?? '-'}${contexto.usuario ? ` sub=${contexto.usuario}` : ''}`,
+        ),
       ),
     );
   });

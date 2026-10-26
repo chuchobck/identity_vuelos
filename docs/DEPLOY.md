@@ -41,6 +41,12 @@ no levanta y el error nombra la variable (nunca muestra su valor). Una variable 
 | `TRUST_PROXY` | No | `1` | Se usa la IP del socket: detrás de un balanceador, todos los clientes comparten el límite por IP y la auditoría guarda la IP del balanceador. `true` no se acepta |
 | `RATE_LIMIT_MAX` | No | `100` | 100 peticiones por IP y por ventana en todo el servicio |
 | `RATE_LIMIT_WINDOW_SECONDS` | No | `60` | 60 segundos |
+| `METRICS_PORT` | No | `9464` (contenedor), `9467` (los cinco servicios en una máquina) | `9464`. Puerto aparte de `GET /metrics` (Prometheus), que el ingress **nunca** expone; `0` lo apaga. Un puerto ocupado no tumba el servicio: avisa y sigue sin métricas |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | `http://jaeger:4318` | No se exportan trazas. Igual hay `X-Trace-Id` y `traceId` en los logs. Los spans salen a `{endpoint}/v1/traces` en lotes cada 2 s; un recolector caído o lento nunca retrasa una petición |
+| `OTEL_TRACES_SAMPLER_ARG` | No | `0.1` | 1 en desarrollo, 0.1 en producción: fracción de trazas raíz que se registran (0 a 1) |
+| `TRACE_TRUST_INCOMING` | No | `true` | `true`: continúa el `traceparent` del gateway (identity es interno). Solo `true` o `false` |
+| `OTEL_SERVICE_NAME` | No | `quinde-identity` | `quinde-identity` |
+| `OTEL_BSP_SCHEDULE_DELAY` | No | `2000` | 2000 ms entre lotes de spans. Existe para las pruebas |
 | `SEED_ADMIN_EMAIL` | No (solo `db/reset.sh`) | `admin@quinde.example` | `admin@quinde.example` |
 | `SEED_ADMIN_PASSWORD` | No (solo `db/reset.sh`) | 12 a 128 caracteres | No se crea el administrador inicial |
 | `DB_PORT` | No (solo `docker-compose.yml`) | `5433` | 5433 |

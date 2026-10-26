@@ -1,3 +1,4 @@
+import { Observabilidad } from '../../observabilidad/observabilidad.service';
 import { Injectable } from '@nestjs/common';
 import { fijarUsuario } from '../../common/contexto/contexto-peticion';
 import { AuditoriaSeguridad, MotivoSeguridad } from '../auditoria/auditoria.service';
@@ -25,9 +26,19 @@ export class OAuth2Service {
     private readonly tokens: TokensService,
     private readonly auditoria: AuditoriaSeguridad,
     private readonly limite: LimitePorCliente,
+    private readonly observabilidad: Observabilidad,
   ) {}
 
-  async emitirToken(
+  emitirToken(
+    cuerpo: unknown,
+    autorizacion: string | undefined,
+  ): Promise<TokenClienteRespuestaDto> {
+    return this.observabilidad.span('oauth2.token', () =>
+      this.emitirTokenConSpan(cuerpo, autorizacion),
+    );
+  }
+
+  private async emitirTokenConSpan(
     cuerpo: unknown,
     autorizacion: string | undefined,
   ): Promise<TokenClienteRespuestaDto> {
@@ -61,6 +72,7 @@ export class OAuth2Service {
     }
 
     const acceso = await this.tokens.emitir({ sub: cliente.id, scopes, clientId: cliente.codigo });
+    this.observabilidad.tokenEmitido('client_credentials');
     await this.auditoria.registrar({
       evento: 'TOKEN_CLIENTE',
       resultado: 'EXITO',
