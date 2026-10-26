@@ -41,9 +41,10 @@ CREATE TYPE evento_seguridad AS ENUM (
     'TOKEN_CLIENTE',
     'CLIENTE_CREADO',
     'ADMINISTRADOR_CREADO',
-    'ADMINISTRADOR_DADO_DE_BAJA'
+    'ADMINISTRADOR_DADO_DE_BAJA',
+    'CLIENTE_SECRETO_ROTADO'
 );
-COMMENT ON TYPE evento_seguridad IS 'Evento de auditoria_seguridad. REUSO_REFRESCO=llegó un refresh ya rotado y se revocó la familia; ACCESO_CUENTA_INACTIVA=un token válido de una cuenta desactivada; TOKEN_CLIENTE=POST /oauth2/token (client_credentials); ADMINISTRADOR_CREADO y ADMINISTRADOR_DADO_DE_BAJA=POST y DELETE de /admin/users (actor_id es quien lo hizo).';
+COMMENT ON TYPE evento_seguridad IS 'Evento de auditoria_seguridad. REUSO_REFRESCO=llegó un refresh ya rotado y se revocó la familia; ACCESO_CUENTA_INACTIVA=un token válido de una cuenta desactivada; TOKEN_CLIENTE=POST /oauth2/token (client_credentials); ADMINISTRADOR_CREADO y ADMINISTRADOR_DADO_DE_BAJA=POST y DELETE de /admin/users (actor_id es quien lo hizo); CLIENTE_SECRETO_ROTADO=npm run cliente:rotar-secreto.';
 
 CREATE TYPE resultado_seguridad AS ENUM ('EXITO', 'FALLO');
 

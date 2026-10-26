@@ -120,6 +120,7 @@ enum evento_seguridad {
   CLIENTE_CREADO
   ADMINISTRADOR_CREADO
   ADMINISTRADOR_DADO_DE_BAJA
+  CLIENTE_SECRETO_ROTADO
 }
 
 /// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

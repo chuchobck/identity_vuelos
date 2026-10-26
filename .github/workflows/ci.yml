@@ -87,6 +87,11 @@ jobs:
           for _ in 1 2; do
             DATABASE_URL="${DATABASE_URL/identity_db/identity_migrada}" ./db/migrar.sh
           done
+          # migrar.sh corre TODAS las migraciones en cada despliegue: con un cliente que ya tiene
+          # un scope nuevo, una migración vieja no puede volver a poner un CHECK más estrecho
+          docker exec "$CONTENEDOR" psql -U postgres -d identity_migrada -v ON_ERROR_STOP=1 -q -c \
+            "INSERT INTO identidad.cliente_oauth (codigo, nombre, hash_secreto, scopes_permitidos) VALUES ('ci-todos-los-scopes', 'CI', '\$argon2id\$v=19\$m=1,t=1,p=1\$AAAA\$AAAA', ARRAY['flights:read','flights:hold','flights:book','flights:cancel','flights:webhooks','flights:ops','flights:admin','events:publish'])"
+          DATABASE_URL="${DATABASE_URL/identity_db/identity_migrada}" ./db/migrar.sh
           volcar() {
             docker exec "$CONTENEDOR" pg_dump -U postgres --schema-only --schema=identidad "$1" \
               | grep -vE '^\\(un)?restrict '
