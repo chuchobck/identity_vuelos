@@ -12,9 +12,13 @@ claves públicas que este servicio publica, sin compartir ningún secreto.
   copia de `/flights/v1/admin/users` del core (mismos cuerpos, reglas y errores). Piden el token de
   una persona con `flights:admin`.
 - **Sistemas** (máquina a máquina): `POST /oauth2/token` con `grant_type=client_credentials`
-  (RFC 6749, sección 4.4). `flights:admin` y `events:publish` (para que un servicio publique
-  eventos) solo salen si el cliente los tiene permitidos y los pide; ninguna persona recibe
-  `events:publish`.
+  (RFC 6749, sección 4.4). `flights:ops`, `flights:admin` y `events:publish` solo salen si el
+  cliente los tiene permitidos y los pide; ninguna persona recibe `events:publish`.
+- **Partner del contrato v2**: Booking Prototipo pide aquí su token (`PartnerOAuth2`); ver
+  [`docs/PARTNER-BOOKING.md`](docs/PARTNER-BOOKING.md).
+- **Trazabilidad y observabilidad** (estándar de Quinde): `X-Correlation-Id` (contrato v2, §6) en
+  toda respuesta, en los logs y en la auditoría; trazas OpenTelemetry (`X-Trace-Id`) y métricas de
+  Prometheus en `METRICS_PORT`.
 - **Descubrimiento**: `GET /.well-known/jwks.json` y `GET /.well-known/openid-configuration`.
 - **Salud**: `GET /identity/v1/health` y `/identity/v1/health/ready`.
 - **Documentación**: Swagger en `/api/docs`; el contrato en
@@ -41,6 +45,7 @@ claims    iss  JWT_ISSUER (https://identity.quinde.example)
 | Scope | Personas | Clientes OAuth |
 | --- | --- | --- |
 | `flights:read`, `hold`, `book`, `cancel`, `webhooks` | Roles `cliente` y `administrador` | Los permitidos; salen sin pedirlos |
+| `flights:ops` (operaciones de aeropuerto, v2) | Rol `administrador` | Solo con `--permitir-ops` al crearlo y si lo pide |
 | `flights:admin` | Rol `administrador` | Solo con `--permitir-admin` al crearlo y si lo pide |
 | `events:publish` | Nunca | Solo con `--permitir-eventos` al crearlo y si lo pide |
 
@@ -96,9 +101,10 @@ curl -s http://localhost:3001/.well-known/jwks.json
 | `npm run build` / `npm run start:prod` | Compilar y correr `dist/` |
 | `npm run lint`, `format:check`, `typecheck` | Calidad (lo mismo que CI) |
 | `npm test` | Suite e2e contra PostgreSQL (necesita la base del `.env` o `DATABASE_URL`) |
-| `npm run test:mutaciones` | Rompe el código a propósito (40 mutaciones) y exige que alguna prueba falle |
+| `npm run test:mutaciones` | Rompe el código a propósito (56 mutaciones) y exige que alguna prueba falle |
 | `npm run keys:generate` | Imprime un par RSA nuevo para `JWT_SIGNING_KEY` |
-| `npm run cliente:crear -- --nombre ... --scopes ...` | Crea un cliente OAuth e imprime su secreto una sola vez (`--permitir-admin`, `--permitir-eventos`) |
+| `npm run cliente:crear -- --nombre ... --scopes ...` | Crea un cliente OAuth e imprime su secreto una sola vez (`--permitir-admin`, `--permitir-ops`, `--permitir-eventos`) |
+| `npm run cliente:rotar-secreto -- --client-id ...` | Cambia el secreto de un cliente sin cambiar su `client_id` e imprime el nuevo una sola vez |
 | `npm run openapi:export` | Regenera `contracts/identity-openapi.json` |
 | `./db/reset.sh` | Borra y recrea el esquema `identidad` (nunca la base) |
 | `./db/migrar.sh` | Aplica `db/migraciones/*.sql` a una base que ya existe (idempotente, no borra) |
@@ -115,7 +121,8 @@ src/
     descubrimiento/  /.well-known/jwks.json y openid-configuration
     auditoria/       auditoria_seguridad
     salud/           /health y /health/ready
-  common/            contexto y X-Request-Id, errores, logs JSON, límites, guards de token y scopes
+  observabilidad/    trazas (OpenTelemetry) y métricas (prom-client) del estándar de Quinde
+  common/            contexto, X-Request-Id y X-Correlation-Id, errores, logs JSON, límites, guards de token y scopes
   config/            entorno validado, seguridad HTTP, Swagger
   cli/               keys:generate, cliente:crear, openapi:export
 db/                  esquema_identidad.sql, semilla, reset.sh, migrar.sh y migraciones/

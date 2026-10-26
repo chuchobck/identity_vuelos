@@ -3,7 +3,45 @@
 Formato de [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones según
 [SemVer](https://semver.org/lang/es/).
 
-## [0.2.0] — sin publicar (fase 4c del Reto 2)
+## [0.3.0] — sin publicar (fase I2: contrato v2, partner y observabilidad)
+
+### Agregado
+
+- Scope `flights:ops` (operaciones de aeropuerto del contrato v2): lo lleva el rol `administrador`
+  y ningún rol `cliente`; un cliente OAuth lo recibe solo si lo tiene permitido
+  (`cliente:crear --permitir-ops`) y lo pide. Está en el CHECK de la base (migración 002) y en el
+  descubrimiento.
+- `docs/PARTNER-BOOKING.md`: cómo crear el cliente `booking-prototipo` (cinco scopes, sin
+  `flights:ops`, `flights:admin` ni `events:publish`), pedir su token (15 minutos, con `client_id`)
+  y rotar su secreto.
+- `npm run cliente:rotar-secreto`: cambia el secreto de un cliente activo sin cambiar su
+  `client_id`, y deja `CLIENTE_SECRETO_ROTADO` en la auditoría (migración 003).
+- `X-Correlation-Id` (contrato v2, §6): se lee (o se genera `corr-<uuid>`), se devuelve en toda
+  respuesta, va en `ProblemDetails.correlation_id`, en cada línea de log y en
+  `auditoria_seguridad.id_correlacion` (migración 004).
+- Observabilidad del estándar de Quinde: el módulo del gateway (trazas OpenTelemetry con
+  `X-Trace-Id`, métricas de Prometheus en `METRICS_PORT`), spans `auth.login`, `auth.refresh` y
+  `oauth2.token`, y las métricas `identity_logins_total` e `identity_tokens_issued_total`.
+- Variables nuevas: `METRICS_PORT`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`,
+  `TRACE_TRUST_INCOMING`, `OTEL_SERVICE_NAME` y `OTEL_BSP_SCHEDULE_DELAY`.
+- 41 pruebas nuevas (195 en total) y 16 mutaciones nuevas (56).
+
+### Cambiado
+
+- El rol `administrador` suma `flights:ops`; `/oauth2/token` sin `scope` deja fuera también
+  `flights:ops`.
+- `ProblemDetails` suma `correlation_id` (opcional en el esquema, presente en todo error de
+  `/identity/v1`). Los errores de `/oauth2/token` conservan el formato de RFC 6749.
+- Las migraciones que reemplazan `ck_cliente_oauth_scopes` (001 y 002) lo hacen solo si el vigente
+  no admite ya su scope: `migrar.sh` corre todas en cada despliegue y una vieja fallaba con un
+  cliente que tuviera un scope más nuevo.
+
+### Migración
+
+- `./db/migrar.sh` **antes** de desplegar la 0.3.0: aplica la 002, la 003 y la 004. Sin la 004, la
+  auditoría no puede escribir (falta `id_correlacion`) y un login deja de registrarse.
+
+## [0.2.0] — fusionada (fase 4c del Reto 2)
 
 ### Agregado
 
