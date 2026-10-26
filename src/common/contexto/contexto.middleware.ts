@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { ContextoPeticion, ejecutarEnContexto, normalizarIp } from './contexto-peticion';
+import { CABECERA_CORRELATION_ID, resolverCorrelationId } from './correlation-id';
 import { CABECERA_REQUEST_ID, resolverRequestId } from './request-id';
 
 const logger = new Logger('HTTP');
@@ -16,7 +17,8 @@ export function contextoDeLaPeticion(peticion: Request): ContextoPeticion | unde
 }
 
 /**
- * Primer middleware de la app. Asigna el X-Request-Id y lo devuelve en la respuesta; como va
+ * Primer middleware de la app. Asigna el X-Request-Id y el X-Correlation-Id y los devuelve en la
+ * respuesta; como va
  * antes que helmet, CORS y el parser del cuerpo, también lo llevan los errores que esos
  * producen (413, JSON roto). Al terminar la respuesta deja una línea de log de acceso.
  *
@@ -27,11 +29,13 @@ export function contextoDeLaPeticion(peticion: Request): ContextoPeticion | unde
 export function middlewareRequestId(peticion: Request, respuesta: Response, next: NextFunction) {
   const contexto: ContextoPeticion = {
     requestId: resolverRequestId(peticion.headers['x-request-id']),
+    correlationId: resolverCorrelationId(peticion.headers['x-correlation-id']),
     ip: normalizarIp(peticion.ip),
     usuario: null,
   };
   (peticion as PeticionConContexto)[CONTEXTO_EN_PETICION] = contexto;
   respuesta.setHeader(CABECERA_REQUEST_ID, contexto.requestId);
+  respuesta.setHeader(CABECERA_CORRELATION_ID, contexto.correlationId);
 
   const inicio = process.hrtime.bigint();
   respuesta.on('finish', () => {

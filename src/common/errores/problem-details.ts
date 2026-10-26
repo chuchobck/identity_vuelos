@@ -40,6 +40,14 @@ export class ProblemDetails {
     },
   })
   invalidParams?: ParametroInvalido[];
+
+  @ApiPropertyOptional({
+    example: 'corr-vuelos-7f3a9c',
+    maxLength: 100,
+    description:
+      'El X-Correlation-Id de la petición (contrato v2, §6): el mismo que la respuesta lleva en su cabecera',
+  })
+  correlation_id?: string;
 }
 
 /** Descripción corta del status, como en RFC 9457 (`Not Found`, `Conflict`...). */

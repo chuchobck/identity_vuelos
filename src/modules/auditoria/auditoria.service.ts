@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { obtenerContexto } from '../../common/contexto/contexto-peticion';
+import { esCorrelationIdValido } from '../../common/contexto/correlation-id';
 import { esRequestIdValido } from '../../common/contexto/request-id';
 import { evento_seguridad, resultado_seguridad } from '../../generated/prisma/client';
 import { resumirError, TransaccionIdentidad } from '../../prisma/prisma.service';
@@ -55,7 +56,7 @@ export interface EventoSeguridad {
 }
 
 /**
- * Deja cada evento de seguridad en auditoria_seguridad, con la IP y el X-Request-Id de la
+ * Deja cada evento de seguridad en auditoria_seguridad, con la IP, el X-Request-Id y el X-Correlation-Id de la
  * petición en curso (para cruzarlo con los logs).
  *
  * Va fuera de las transacciones de negocio: un login fallido o una reutilización revertida
@@ -88,7 +89,7 @@ export class AuditoriaSeguridad {
   }
 }
 
-/** La fila, con la IP y el X-Request-Id de la petición en curso. Nunca el correo completo. */
+/** La fila, con la IP y los X-Request-Id y X-Correlation-Id de la petición en curso. Nunca el correo completo. */
 function aFila(evento: EventoSeguridad) {
   const contexto = obtenerContexto();
   return {
@@ -102,6 +103,8 @@ function aFila(evento: EventoSeguridad) {
       evento.correoIntentado === undefined ? null : enmascararCorreo(evento.correoIntentado),
     direccion_ip: contexto?.ip ?? null,
     id_peticion: contexto && esRequestIdValido(contexto.requestId) ? contexto.requestId : null,
+    id_correlacion:
+      contexto && esCorrelationIdValido(contexto.correlationId) ? contexto.correlationId : null,
   };
 }
 

@@ -796,6 +796,12 @@
                 }
               }
             }
+          },
+          "correlation_id": {
+            "type": "string",
+            "example": "corr-vuelos-7f3a9c",
+            "maxLength": 100,
+            "description": "El X-Correlation-Id de la petición (contrato v2, §6): el mismo que la respuesta lleva en su cabecera"
           }
         },
         "required": [

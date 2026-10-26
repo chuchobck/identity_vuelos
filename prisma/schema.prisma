@@ -24,6 +24,7 @@ model auditoria_seguridad {
   direccion_ip   String?             @db.Inet
   id_peticion    String?
   actor_id       String?             @db.Uuid
+  id_correlacion String?
   actor          usuario?            @relation("auditoria_seguridad_actor_idTousuario", fields: [actor_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_actor")
   cliente_oauth  cliente_oauth?      @relation(fields: [cliente_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_cliente")
   usuario        usuario?            @relation(fields: [usuario_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_auditoria_seguridad_usuario")
@@ -32,6 +33,7 @@ model auditoria_seguridad {
   @@index([fecha_evento], map: "ix_auditoria_seguridad_fecha")
   @@index([usuario_id, fecha_evento], map: "ix_auditoria_seguridad_usuario", where: raw("(usuario_id IS NOT NULL)"))
   @@index([actor_id, fecha_evento], map: "ix_auditoria_seguridad_actor", where: raw("(actor_id IS NOT NULL)"))
+  @@index([id_correlacion], map: "ix_auditoria_seguridad_correlacion", where: raw("(id_correlacion IS NOT NULL)"))
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

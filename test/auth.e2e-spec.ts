@@ -173,7 +173,11 @@ describe('Auth de personas', () => {
         expect(respuesta.headers['cache-control']).toBe('no-store');
       }
       const [primero, ...demas] = intentos;
-      for (const respuesta of demas) expect(respuesta.body).toEqual(primero.body);
+      // Salvo el correlation_id, que es de cada petición y no dice nada de la cuenta
+      const sinCorrelacion = ({ correlation_id: _id, ...resto }: Record<string, unknown>) => resto;
+      for (const respuesta of demas) {
+        expect(sinCorrelacion(respuesta.body)).toEqual(sinCorrelacion(primero.body));
+      }
       expect(primero.body.detail).toBe('Invalid email or password');
     });
 

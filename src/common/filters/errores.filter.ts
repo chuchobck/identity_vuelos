@@ -57,6 +57,9 @@ export class ErroresFilter implements ExceptionFilter {
       metodosPermitidos: this.metodosDeLaRuta(ruta),
     });
 
+    // El contrato v2 (§6) pide el id del proceso en todo error: `ProblemDetails.correlation_id`
+    if (contexto) problema.correlation_id = contexto.correlationId;
+
     registrar(() => {
       if (esErrorInterno) {
         this.logger.error(
