@@ -144,7 +144,7 @@ const MUTACIONES = [
   {
     nombre: 'eventos-implicito: un cliente recibe events:publish sin pedirlo',
     archivo: SCOPES,
-    cambios: [['= [SCOPE_ADMINISTRACION, SCOPE_EVENTOS];', '= [SCOPE_ADMINISTRACION];']],
+    cambios: [['  SCOPE_ADMINISTRACION,\n  SCOPE_EVENTOS,\n];', '  SCOPE_ADMINISTRACION,\n];']],
     prueba: 'test/oauth2.e2e-spec.ts',
     filtro: 'nunca por defecto',
   },
@@ -397,6 +397,163 @@ const MUTACIONES = [
     cambios: [['  `/${PREFIJO_GLOBAL}/v${VERSION_POR_DEFECTO}/admin/`,\n', '']],
     prueba: ADMINS_E2E,
     filtro: 'no-store',
+  },
+  {
+    nombre: 'ops-rol-cliente: el rol cliente recibe flights:ops',
+    archivo: SCOPES,
+    cambios: [
+      [
+        "  cliente: ['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks'],",
+        "  cliente: ['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks', 'flights:ops'],",
+      ],
+    ],
+    prueba: 'test/auth.e2e-spec.ts',
+    filtro: 'flights:ops: el administrador lo trae',
+  },
+  {
+    nombre: 'ops-implicito: un cliente recibe flights:ops sin pedirlo',
+    archivo: SCOPES,
+    cambios: [
+      [
+        'export const SCOPES_SOLO_A_PEDIDO: readonly Scope[] = [\n  SCOPE_OPERACIONES,\n',
+        'export const SCOPES_SOLO_A_PEDIDO: readonly Scope[] = [\n',
+      ],
+    ],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'solo lo recibe si se le permitió',
+  },
+  {
+    nombre: 'ops-alta: --permitir-admin y --permitir-eventos bastan para dar de alta flights:ops',
+    archivo: 'src/modules/oauth2/clientes/alta-cliente.ts',
+    cambios: [
+      [
+        '(pedidos.includes(SCOPE_OPERACIONES) && !datos.permitirOperaciones)',
+        '(pedidos.includes(SCOPE_OPERACIONES) && !datos.permitirOperaciones && !datos.permitirAdmin)',
+      ],
+    ],
+    prueba: 'test/oauth2.e2e-spec.ts',
+    filtro: 'el alta con flights:ops',
+  },
+  {
+    nombre: 'partner-sin-client-id: el token de un cliente no trae client_id',
+    archivo: TOKENS,
+    cambios: [['    if (sujeto.clientId !== undefined) claims.client_id = sujeto.clientId;\n', '']],
+    prueba: 'test/partner.e2e-spec.ts',
+    filtro: 'el token trae client_id',
+  },
+  {
+    nombre: 'rotacion-no-invalida: el secreto anterior sigue sirviendo tras la rotación',
+    archivo: 'src/modules/oauth2/clientes/rotar-secreto.ts',
+    cambios: [['      data: { hash_secreto: hash },', '      data: { nombre: undefined },']],
+    prueba: 'test/partner.e2e-spec.ts',
+    filtro: 'el secreto nuevo sirve',
+  },
+  {
+    nombre: 'correlation-no-se-devuelve: la respuesta pierde X-Correlation-Id',
+    archivo: 'src/common/contexto/contexto.middleware.ts',
+    cambios: [['  respuesta.setHeader(CABECERA_CORRELATION_ID, contexto.correlationId);\n', '']],
+    prueba: 'test/correlacion.e2e-spec.ts',
+    filtro: 'el que manda el cliente se devuelve igual',
+  },
+  {
+    nombre: 'correlation-se-regenera: el servicio ignora el X-Correlation-Id que recibe',
+    archivo: 'src/common/contexto/correlation-id.ts',
+    cambios: [
+      [
+        '  return esCorrelationIdValido(cabecera) ? cabecera : `corr-${randomUUID()}`;',
+        '  return `corr-${randomUUID()}`;',
+      ],
+    ],
+    prueba: 'test/correlacion.e2e-spec.ts',
+    filtro: 'el que manda el cliente se devuelve igual',
+  },
+  {
+    nombre: 'correlation-inyeccion: acepta cualquier X-Correlation-Id (comillas en el log)',
+    archivo: 'src/common/contexto/correlation-id.ts',
+    cambios: [
+      [
+        "  return typeof valor === 'string' && FORMATO_VALIDO.test(valor);",
+        "  return typeof valor === 'string';",
+      ],
+    ],
+    prueba: 'test/correlacion.e2e-spec.ts',
+    filtro: 'se descarta y se genera otro',
+  },
+  {
+    nombre: 'correlation-no-va-al-log: las líneas de log pierden correlationId',
+    archivo: 'src/common/logger/logger-json.ts',
+    cambios: [['      correlationId: obtenerContexto()?.correlationId,\n', '']],
+    prueba: 'test/correlacion.e2e-spec.ts',
+    filtro: 'cada línea de log',
+  },
+  {
+    nombre: 'correlation-no-va-a-la-auditoria: la fila no guarda id_correlacion',
+    archivo: 'src/modules/auditoria/auditoria.service.ts',
+    cambios: [['    id_correlacion:\n', '    id_correlacion_perdida:\n']],
+    prueba: 'test/correlacion.e2e-spec.ts',
+    filtro: 'auditoría de seguridad',
+  },
+  {
+    nombre: 'correlation-no-va-al-error: ProblemDetails pierde correlation_id',
+    archivo: 'src/common/filters/errores.filter.ts',
+    cambios: [['    if (contexto) problema.correlation_id = contexto.correlationId;\n', '']],
+    prueba: 'test/correlacion.e2e-spec.ts',
+    filtro: 'todo error de /identity/v1',
+  },
+  {
+    nombre: 'trace-no-continua: ignora el traceparent del gateway',
+    archivo: 'src/observabilidad/observabilidad.module.ts',
+    cambios: [
+      [
+        "config.get<string>('TRACE_TRUST_INCOMING') !== 'false'",
+        "config.get<string>('TRACE_TRUST_INCOMING') === 'true'",
+      ],
+    ],
+    prueba: 'test/observabilidad.e2e-spec.ts',
+    filtro: 'continúa el traceparent del gateway',
+  },
+  {
+    nombre: 'ruta-cruda: la métrica y el span usan la ruta pedida y no la plantilla',
+    archivo: 'src/observabilidad/express.ts',
+    cambios: [
+      [
+        '  const completa = `${peticion.baseUrl}${ruta}`;',
+        '  const completa = peticion.originalUrl;',
+      ],
+    ],
+    prueba: 'test/observabilidad.e2e-spec.ts',
+    filtro: 'cardinalidad acotada',
+  },
+  {
+    nombre: 'atributo-sensible: la query (con un secreto) va a un atributo del span',
+    archivo: 'src/observabilidad/express.ts',
+    cambios: [
+      [
+        "{ 'http.request.method': metodo, 'quinde.request_id': requestId },",
+        "{ 'http.request.method': metodo, 'quinde.request_id': peticion.originalUrl },",
+      ],
+    ],
+    prueba: 'test/observabilidad.e2e-spec.ts',
+    filtro: 'solo atributos permitidos',
+  },
+  {
+    nombre: 'log-sin-traza: las líneas de log pierden el traceId',
+    archivo: 'src/common/logger/logger-json.ts',
+    cambios: [['      traceId: camposDeTraza().traceId,\n', '']],
+    prueba: 'test/observabilidad.e2e-spec.ts',
+    filtro: 'toda línea escrita durante una petición',
+  },
+  {
+    nombre: 'metrica-con-correo: el login cuenta por correo en una etiqueta',
+    archivo: 'src/observabilidad/observabilidad.service.ts',
+    cambios: [
+      [
+        '    this.logins.labels(resultado).inc();',
+        '    this.logins.labels(`${resultado}-${Math.random()}`).inc();',
+      ],
+    ],
+    prueba: 'test/observabilidad.e2e-spec.ts',
+    filtro: 'propias acotadas',
   },
   {
     nombre: 'clave-corta: el entorno acepta RSA de 1024 bits',
