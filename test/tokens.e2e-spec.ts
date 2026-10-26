@@ -162,6 +162,7 @@ describe('Tokens RS256 y JWKS', () => {
           'flights:book',
           'flights:cancel',
           'flights:webhooks',
+          'flights:ops',
           'flights:admin',
           'events:publish',
         ],

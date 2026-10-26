@@ -1,7 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { tieneCaracteresDeControl, tieneEtiquetasHtml } from '../../../common/sanitizacion/texto';
 import { ClienteIdentidad } from '../../../prisma/prisma.service';
-import { esScope, Scope, SCOPE_ADMINISTRACION, SCOPE_EVENTOS, SCOPES } from '../../auth/scopes';
+import {
+  esScope,
+  Scope,
+  SCOPE_ADMINISTRACION,
+  SCOPE_EVENTOS,
+  SCOPE_OPERACIONES,
+  SCOPES,
+} from '../../auth/scopes';
 import { ContrasenaService } from '../../auth/seguridad/contrasena.service';
 
 /** Formato de un client_id: el mismo que exige ck_cliente_oauth_codigo en la base. */
@@ -15,6 +22,8 @@ export interface DatosAltaCliente {
   clientId?: string;
   /** Sin esto, pedir flights:admin es un error: un cliente nunca lo recibe por descuido. */
   permitirAdmin?: boolean;
+  /** Lo mismo con flights:ops (operaciones de aeropuerto del contrato v2). */
+  permitirOperaciones?: boolean;
   /** Lo mismo con events:publish: solo un servicio que publica eventos lo tiene permitido. */
   permitirEventos?: boolean;
 }
@@ -60,6 +69,11 @@ export function validarAltaCliente(datos: DatosAltaCliente): {
   if (pedidos.includes(SCOPE_ADMINISTRACION) && !datos.permitirAdmin) {
     throw new AltaClienteInvalida(
       `${SCOPE_ADMINISTRACION} solo se permite con --permitir-admin (un cliente de administración)`,
+    );
+  }
+  if (pedidos.includes(SCOPE_OPERACIONES) && !datos.permitirOperaciones) {
+    throw new AltaClienteInvalida(
+      `${SCOPE_OPERACIONES} solo se permite con --permitir-ops (un cliente de operaciones de aeropuerto)`,
     );
   }
   if (pedidos.includes(SCOPE_EVENTOS) && !datos.permitirEventos) {

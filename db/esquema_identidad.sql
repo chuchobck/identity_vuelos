@@ -158,14 +158,15 @@ CREATE TABLE cliente_oauth (
     CONSTRAINT ck_cliente_oauth_codigo CHECK (codigo ~ '^[a-z0-9][a-z0-9._-]{2,63}$'),
     CONSTRAINT ck_cliente_oauth_nombre CHECK (btrim(nombre) <> '' AND char_length(nombre) <= 100),
     CONSTRAINT ck_cliente_oauth_hash_secreto CHECK (hash_secreto ~ '^\$argon2id\$v=19\$[a-z]=[0-9]+(,[a-z]=[0-9]+)*\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$'),
-    -- Solo los scopes que existen (los 5 del contrato, flights:admin y events:publish), sin
-    -- repetidos ni nulos. Que un cliente reciba flights:admin o events:publish además exige
-    -- pedirlo en cada token (ver el servicio). La misma lista que SCOPES en
-    -- src/modules/auth/scopes.ts; db/migraciones/001 la lleva a una base ya creada.
+    -- Solo los scopes que existen (los 5 del contrato, flights:ops, flights:admin y
+    -- events:publish), sin repetidos ni nulos. Que un cliente reciba flights:ops, flights:admin
+    -- o events:publish además exige pedirlo en cada token (ver el servicio). La misma lista que
+    -- SCOPES en src/modules/auth/scopes.ts; db/migraciones/001 y 002 la llevan a una base ya
+    -- creada.
     CONSTRAINT ck_cliente_oauth_scopes CHECK (
-            cardinality(scopes_permitidos) BETWEEN 1 AND 7
+            cardinality(scopes_permitidos) BETWEEN 1 AND 8
         AND array_position(scopes_permitidos, NULL) IS NULL
-        AND scopes_permitidos <@ ARRAY['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks', 'flights:admin', 'events:publish']::text[]
+        AND scopes_permitidos <@ ARRAY['flights:read', 'flights:hold', 'flights:book', 'flights:cancel', 'flights:webhooks', 'flights:ops', 'flights:admin', 'events:publish']::text[]
         AND fn_sin_repetidos(scopes_permitidos)
     ),
     CONSTRAINT ck_cliente_oauth_fechas CHECK (fecha_actualizacion >= fecha_creacion)

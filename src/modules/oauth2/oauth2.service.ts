@@ -110,7 +110,7 @@ export class OAuth2Service {
  *
  * - Con `scope`: todos los pedidos tienen que existir y estar permitidos al cliente; si uno no,
  *   invalid_scope (no se entrega un subconjunto en silencio).
- * - Sin `scope`: los permitidos, MENOS flights:admin y events:publish (SCOPES_SOLO_A_PEDIDO).
+ * - Sin `scope`: los permitidos, MENOS flights:ops, flights:admin y events:publish (SCOPES_SOLO_A_PEDIDO).
  *   Esos solo salen si el cliente los tiene permitidos de forma explícita y además los pide en
  *   esta petición.
  */

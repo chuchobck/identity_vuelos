@@ -6,7 +6,7 @@
  * DÓNDE VIVE ESTA TABLA: en código y no en la base, a propósito (la misma razón que en el core).
  * - Un scope solo significa algo si un `@Scopes(...)` del core lo exige: agregar uno en la base
  *   sin cambiar el código no protege nada. Cualquier cambio de permisos ya implica desplegar.
- * - Son 2 roles y 7 scopes (5 del contrato y 2 del proyecto): una tabla `alcance` y otra
+ * - Son 2 roles y 8 scopes (7 del contrato v2 y 1 del proyecto): una tabla `alcance` y otra
  *   `rol_alcance` sumarían dos joins a cada login y refresh sin dar flexibilidad real.
  * Lo que sí está en la base es qué rol tiene cada usuario (usuario_rol) y qué scopes puede pedir
  * cada cliente OAuth (cliente_oauth.scopes_permitidos): eso cambia sin desplegar. Los códigos de
@@ -15,11 +15,10 @@
  */
 
 /**
- * Los 5 scopes de components.securitySchemes.OAuth2Security del contrato del core, más dos
- * propios del proyecto que no están en el contrato: `flights:admin`, para la administración
- * (/admin del core y /identity/v1/admin de aquí), y `events:publish`, para que un servicio (el
- * core) publique eventos. El orden es el de la respuesta (`scope` del token y `scopes` de
- * /auth/me).
+ * Los 7 scopes de components.securitySchemes.PartnerOAuth2 del contrato v2 (read, hold, book,
+ * cancel, webhooks, ops y admin) y uno propio del proyecto que no está en el contrato:
+ * `events:publish`, para que un servicio (el core) publique eventos. El orden es el de la
+ * respuesta (`scope` del token y `scopes` de /auth/me).
  */
 export const SCOPES = [
   'flights:read',
@@ -27,6 +26,7 @@ export const SCOPES = [
   'flights:book',
   'flights:cancel',
   'flights:webhooks',
+  'flights:ops',
   'flights:admin',
   'events:publish',
 ] as const;
@@ -35,6 +35,13 @@ export type Scope = (typeof SCOPES)[number];
 
 /** El scope de administración: un cliente OAuth solo lo recibe si lo tiene permitido y lo pide. */
 export const SCOPE_ADMINISTRACION: Scope = 'flights:admin';
+
+/**
+ * El scope de operaciones de aeropuerto del contrato v2 (`PartnerOAuth2`: panel de ocupación y
+ * estado de vuelo). Lo tiene el rol `administrador`; ningún rol `cliente`. Un cliente OAuth solo
+ * lo recibe si lo tiene permitido de forma explícita (`cliente:crear --permitir-ops`) y lo pide.
+ */
+export const SCOPE_OPERACIONES: Scope = 'flights:ops';
 
 /**
  * El scope para publicar eventos. Es de máquina a máquina: ningún rol de persona lo tiene (no
@@ -47,7 +54,11 @@ export const SCOPE_EVENTOS: Scope = 'events:publish';
  * Lo que un cliente OAuth nunca recibe por defecto: aunque los tenga permitidos, sin `scope` en
  * la petición no salen. Hay que pedirlos uno por uno.
  */
-export const SCOPES_SOLO_A_PEDIDO: readonly Scope[] = [SCOPE_ADMINISTRACION, SCOPE_EVENTOS];
+export const SCOPES_SOLO_A_PEDIDO: readonly Scope[] = [
+  SCOPE_OPERACIONES,
+  SCOPE_ADMINISTRACION,
+  SCOPE_EVENTOS,
+];
 
 /** Roles de db/semilla_identidad.sql (tabla rol, columna codigo). */
 export const ROLES = ['cliente', 'administrador'] as const;
@@ -71,6 +82,7 @@ export const SCOPES_POR_ROL: Readonly<Record<CodigoRol, readonly Scope[]>> = {
     'flights:book',
     'flights:cancel',
     'flights:webhooks',
+    'flights:ops',
     'flights:admin',
   ],
 };

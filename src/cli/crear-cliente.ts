@@ -3,6 +3,7 @@
  *
  *   npm run cliente:crear -- --nombre "Agencia Andina" --scopes "flights:read flights:hold"
  *   npm run cliente:crear -- --nombre "Batch catálogo" --scopes "flights:admin" --permitir-admin
+ *   npm run cliente:crear -- --nombre "Panel de operaciones" --scopes "flights:ops" --permitir-ops
  *   npm run cliente:crear -- --nombre "Core eventos" --scopes "events:publish" --permitir-eventos
  *   npm run cliente:crear -- --nombre "..." --scopes "..." --client-id agencia-andina
  *
@@ -26,6 +27,7 @@ async function principal(): Promise<void> {
       'client-id': { type: 'string' },
       'permitir-admin': { type: 'boolean', default: false },
       'permitir-eventos': { type: 'boolean', default: false },
+      'permitir-ops': { type: 'boolean', default: false },
     },
     strict: true,
   });
@@ -42,6 +44,7 @@ async function principal(): Promise<void> {
       clientId: values['client-id'],
       permitirAdmin: values['permitir-admin'],
       permitirEventos: values['permitir-eventos'],
+      permitirOperaciones: values['permitir-ops'],
     });
     console.log('Cliente creado. Guarda el secreto ahora: no se vuelve a mostrar.');
     console.log(`client_id:     ${cliente.clientId}`);

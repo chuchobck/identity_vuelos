@@ -214,6 +214,57 @@ describe('OAuth 2.0 client_credentials', () => {
     });
   });
 
+  describe('flights:ops (operaciones de aeropuerto del contrato v2)', () => {
+    it('un cliente solo lo recibe si se le permitió y lo pide', async () => {
+      const operador = await crearClienteDePrueba(app, {
+        scopes: 'flights:read flights:ops',
+        permitirOperaciones: true,
+      });
+      const pedido = await pedir(
+        { ...CC, scope: 'flights:ops' },
+        basic(operador.clientId, operador.secreto),
+      ).expect(200);
+      expect(pedido.body.scope).toBe('flights:ops');
+      expect(decodeJwt(pedido.body.access_token)).toMatchObject({
+        scope: 'flights:ops',
+        client_id: operador.clientId,
+      });
+      // Sin pedirlo no sale: nunca por defecto
+      const sinPedir = await pedir(CC, basic(operador.clientId, operador.secreto)).expect(200);
+      expect(sinPedir.body.scope).toBe('flights:read');
+    });
+
+    it('sin tenerlo permitido: invalid_scope 400, aunque sea un cliente de administración', async () => {
+      const admin = await crearClienteDePrueba(app, {
+        scopes: 'flights:read flights:admin',
+        permitirAdmin: true,
+      });
+      esperarErrorOAuth(
+        await pedir({ ...CC, scope: 'flights:ops' }, basic(admin.clientId, admin.secreto)),
+        400,
+        'invalid_scope',
+      );
+    });
+
+    it('el alta con flights:ops exige --permitir-ops (no bastan las otras banderas)', () => {
+      expect(() => validarAltaCliente({ nombre: 'Ops', scopes: 'flights:ops' })).toThrow(
+        /--permitir-ops/,
+      );
+      expect(() =>
+        validarAltaCliente({
+          nombre: 'Ops',
+          scopes: 'flights:ops',
+          permitirAdmin: true,
+          permitirEventos: true,
+        }),
+      ).toThrow(AltaClienteInvalida);
+      expect(
+        validarAltaCliente({ nombre: 'Ops', scopes: 'flights:ops', permitirOperaciones: true })
+          .scopes,
+      ).toEqual(['flights:ops']);
+    });
+  });
+
   describe('events:publish (solo de máquina a máquina)', () => {
     it('permitido y pedido: sale, solo o con otros scopes', async () => {
       const servicio = await crearClienteDePrueba(app, {
